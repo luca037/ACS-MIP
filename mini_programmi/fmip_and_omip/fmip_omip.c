@@ -201,28 +201,19 @@ TERMINATE:
     return status;
 }
 
-// Permette di creare il problema FMIP partendo dal suo MIP.
-int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
-    int i, cnt, status = 0;
-    double tmp;
-    
-    int numcols = CPXgetnumcols(env, mip);
-    int numrows = CPXgetnumrows(env, mip);
-    int numnz = CPXgetnumnz(env, mip);
+// Copia i dati del problema lp nel problema cp.
+int copy_prob(CPXENVptr env, CPXLPptr lp, CPXLPptr cp) {
+    int i, status = 0;
+
+    int numcols = CPXgetnumcols(env, lp);
+    int numrows = CPXgetnumrows(env, lp);
+    int numnz = CPXgetnumnz(env, lp);
 
     double *obj = NULL, *rhs = NULL, *matval = NULL, *ub = NULL, *lb = NULL;
     char *sense = NULL, *xctype = NULL;
     int *matbeg = NULL, *matind = NULL, *matcnt = NULL;
 
     int nzcnt, surplus;
-
-    *fmip = CPXcreateprob(env, &status, "FMIP");
-    if (*fmip == NULL) {
-        fprintf(stderr, "Failed to create FMIP.\n");
-        status = 1;
-        goto TERMINATE;
-    }
-
     // Salvo i coefficienti della funzione obiettivo del problema MIP.
     obj = (double*) malloc(numcols * sizeof(double));
     if (obj == NULL) {
@@ -230,7 +221,7 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
         goto TERMINATE;
     }
 
-    status = CPXgetobj(env, mip, obj, 0, numcols - 1);
+    status = CPXgetobj(env, lp, obj, 0, numcols - 1);
     if (status) {
         fprintf(stderr, "Failed to copy obj coefficients of MIP into array.\n");
         goto TERMINATE;
@@ -249,7 +240,7 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
         goto TERMINATE;
     }
 
-    status = CPXgetrhs(env, mip, rhs, 0, numrows - 1);
+    status = CPXgetrhs(env, lp, rhs, 0, numrows - 1);
     if (status) {
         fprintf(stderr, "Failed to copy rhs coefficients of MIP into array.\n");
         goto TERMINATE;
@@ -268,7 +259,7 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
         goto TERMINATE;
     }
 
-    status = CPXgetsense(env, mip, sense, 0, numrows - 1);
+    status = CPXgetsense(env, lp, sense, 0, numrows - 1);
     if (status) {
         fprintf(stderr, "Failed to copy sense coefficients of MIP into array.\n");
         goto TERMINATE;
@@ -291,7 +282,7 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
         goto TERMINATE;
     }
 
-    status = CPXgetcols(env, mip, &nzcnt, matbeg, matind, matval, numnz, &surplus, 0, numcols - 1);
+    status = CPXgetcols(env, lp, &nzcnt, matbeg, matind, matval, numnz, &surplus, 0, numcols - 1);
     if (status) {
         fprintf(stderr, "Failed to copy matbeg or matind or matval coefficients of MIP.\n");
         goto TERMINATE;
@@ -336,13 +327,13 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
         goto TERMINATE;
     }
 
-    status = CPXgetub(env, mip, ub, 0, numcols - 1);
+    status = CPXgetub(env, lp, ub, 0, numcols - 1);
     if (status) {
         fprintf(stderr, "Failed to copy upper bounds coefficients of MIP.\n");
         goto TERMINATE;
     }
 
-    status = CPXgetlb(env, mip, lb, 0, numcols - 1);
+    status = CPXgetlb(env, lp, lb, 0, numcols - 1);
     if (status) {
         fprintf(stderr, "Failed to copy upper bounds coefficients of MIP.\n");
         goto TERMINATE;
@@ -365,7 +356,7 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
         goto TERMINATE;
     }
 
-    status = CPXgetctype(env, mip, xctype, 0, numcols - 1);
+    status = CPXgetctype(env, lp, xctype, 0, numcols - 1);
     if (status) {
         fprintf(stderr, "Failed to copy upper bounds coefficients of MIP.\n");
         goto TERMINATE;
@@ -374,7 +365,7 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
     // Ora posso crere la copia del problema MIP in FMIP.
     // TODO: non gestisco rngval (settato a NULL).
     status = CPXcopylp(
-            env, *fmip, numcols, numrows, CPX_MIN, 
+            env, cp, numcols, numrows, CPX_MIN, 
             obj, rhs, sense, matbeg, matcnt, matind, matval, lb, ub, NULL
     );
     if (status) {
@@ -383,9 +374,45 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
     }
 
     // Setto la tipologia delle variabili del problema FMIP.
-    status = CPXcopyctype(env, *fmip, xctype);
+    status = CPXcopyctype(env, cp, xctype);
     if (status) {
         fprintf(stderr, "Failed to set variables types of FMIP.\n");
+        goto TERMINATE;
+    }
+
+TERMINATE:
+
+    free_and_null((char**) &obj);
+    free_and_null((char**) &rhs);
+    free_and_null(&sense);
+    free_and_null((char**) &matbeg);
+    free_and_null((char**) &matind);
+    free_and_null((char**) &matval);
+    free_and_null((char**) &ub);
+    free_and_null((char**) &lb);
+    free_and_null(&xctype);
+
+    return status;
+}
+
+// Permette di creare il problema FMIP partendo dal suo MIP.
+int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
+    int i, cnt, status = 0;
+    double tmp;
+    
+    int numcols = CPXgetnumcols(env, mip);
+    int numrows = CPXgetnumrows(env, mip);
+
+    *fmip = CPXcreateprob(env, &status, "FMIP");
+    if (*fmip == NULL) {
+        fprintf(stderr, "Failed to create FMIP.\n");
+        status = 1;
+        goto TERMINATE;
+    }
+
+    status = copy_prob(env, mip, *fmip);
+    if (status) {
+        fprintf(stderr, "Failed populate FMIP with MIP data.\n");
         goto TERMINATE;
     }
 
@@ -408,6 +435,7 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
             goto TERMINATE;
         }
     }
+
     // Ora setto i coefficienti delle variabili slack a 1.
     // Le variabili slack in totale sono 2 * numrows.
     // Il range di indici delle variabili slack è:
@@ -452,16 +480,6 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
 
 
 TERMINATE:
-
-    free_and_null((char**) &obj);
-    free_and_null((char**) &rhs);
-    free_and_null(&sense);
-    free_and_null((char**) &matbeg);
-    free_and_null((char**) &matind);
-    free_and_null((char**) &matval);
-    free_and_null((char**) &ub);
-    free_and_null((char**) &lb);
-    free_and_null(&xctype);
 
     free_and_null((char**) &indices);
     free_and_null(&lu);
