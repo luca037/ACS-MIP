@@ -25,15 +25,17 @@
 
 // TODO: implementare OMIP.
 
-// Lunghezza del nome delle variabili slack.
+// Lunghezza massima del nome delle variabili slack (compreso il terminatore
+// di stringa).
 // Delta+ e Delta- sono due vettori di lunghezza uguale al numero delle 
 // righe della matrice dei vincoli.
 // Le loro componenti hanno i segunti nomi:
 //      Delta+ = [dp1, dp2, dp3, ..., dpi, ...,]
 //      Delta- = [dn1, dn2, dn3, ..., dni, ...,]
-// Tutti i nomi delle componenti sono lunghi 3 + 1 (il +1 per il terminatore
-// di stringa).
-#define SLACK_NAMES_LEN 4
+// Se 9 è la lunghezza massima allora 9-3 è il numero di cifre massime
+// che può avere il nome delle variabili (-3 per la presenza del carattere
+// 'd', del carattere 'p' e di '\0').
+#define MAX_SLACK_NAMES_LEN 9
 
 // Frees up pointer *ptr and sets it to NULL.
 void free_and_null(char** ptr) {
@@ -107,6 +109,8 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
                                        // Tutti i coefficienti sono diversi 
                                        // da zero.
 
+    printf("num slack da aggiungere = %d\n", ccnt);
+
     double *obj = NULL, *lb = NULL, *ub = NULL, *matval = NULL;
     int *matbeg = NULL, *matind = NULL;
     char **colnames = NULL;
@@ -130,7 +134,7 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
 
     // Alloco spazio per i nomi.
     for (i = 0; i < ccnt; i++) {
-        colnames[i] = (char*) malloc(SLACK_NAMES_LEN * sizeof(char));
+        colnames[i] = (char*) malloc(MAX_SLACK_NAMES_LEN * sizeof(char));
         if (colnames[i] == NULL) {
             fprintf(stderr, "No memory for slack variabiles names.\n");
             status = 1;
@@ -140,8 +144,8 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
 
     // Assegno i nomi alle variabili slack.
     for (i = 0; i < numrows; i++) {
-        snprintf(colnames[i], SLACK_NAMES_LEN, "dp%d", i + 1);
-        snprintf(colnames[i + numrows], SLACK_NAMES_LEN, "dn%d", i + 1);
+        snprintf(colnames[i], MAX_SLACK_NAMES_LEN, "dp%d", i + 1);
+        snprintf(colnames[i + numrows], MAX_SLACK_NAMES_LEN, "dn%d", i + 1);
     }
 
     // Inizializzo: coefficienti nella funzione obiettivo; lowerbound; 
@@ -439,11 +443,11 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
         }
     }
 
-    status = CPXchgbds(env, *fmip, cnt, indices, lu, bd);
-    if (status) {
-        fprintf(stderr, "Failed to fix variables of FMIP.\n");
-        goto TERMINATE;
-    }
+    //status = CPXchgbds(env, *fmip, cnt, indices, lu, bd);
+    //if (status) {
+    //    fprintf(stderr, "Failed to fix variables of FMIP.\n");
+    //    goto TERMINATE;
+    //}
 // ---------------------------------------------------------------------------
 
 
