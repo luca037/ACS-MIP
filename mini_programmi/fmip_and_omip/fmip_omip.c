@@ -23,6 +23,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+// TODO: implementare OMIP.
+
 // Lunghezza del nome delle variabili slack.
 // Delta+ e Delta- sono due vettori di lunghezza uguale al numero delle 
 // righe della matrice dei vincoli.
@@ -82,9 +84,10 @@ int optimze_and_print_results(CPXENVptr env, CPXLPptr lp, double *x) {
         return status;
     }
 
-    // Print x[i] values.
+    // Stampo il valore delle variabili.
+    // TODO: stampare il vero nome delle variabili.
     for (int i = 0; i < cur_numcols; i++) {
-        printf("x[%d] = %17.10g\n", i, x[i]);
+        printf("x[%d] = %.2f\n", i + 1, x[i]);
     }
     
     return status;
