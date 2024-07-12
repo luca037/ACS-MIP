@@ -45,6 +45,7 @@ void free_and_null(char** ptr) {
     }
 }
 
+
 int optimze_and_print_results(CPXENVptr env, CPXLPptr lp, double *x) {
     int status = 0;
     int solstat;
@@ -93,11 +94,13 @@ int optimze_and_print_results(CPXENVptr env, CPXLPptr lp, double *x) {
     }
     
     return status;
-};
+}
+
 
 // Aggiunge le variabili slack alla matrice dei vincoli di lp.
 int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
-    int i, status = 0;
+    int i, tmp, status = 0;
+    char ctype;
 
     int numrows = CPXgetnumrows(env, lp);
     int numcols = CPXgetnumcols(env, lp);
@@ -171,19 +174,22 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
         fprintf(stderr, "Failed to add new columns to the problem.\n");
         goto TERMINATE;
     }
-
-    // Aggiorno il numero di colonne della matrice dei vincoli.
-    numcols = CPXgetnumcols(env, lp);
+    // Nota che non aggiorno il numero di colonne. Quindi numcols indica
+    // il numero di colonne senza considerare le variabili slack aggiunte.
 
     // Setto il tipo delle slack.
-    char ctype[] = {CPX_CONTINUOUS, CPX_CONTINUOUS};
-    int indices[] = {numcols - 2, numcols - 1};
-
-    status = CPXchgctype(env, lp, 2, indices, ctype);
-    if (status) {
-        fprintf(stderr, "Failed to change ctype.\n");
-        goto TERMINATE;
+    // Gli indici delle variabili slack nella matrice dei vincoli, appartengono
+    // al seguente range:
+    //      [numcols, ..., numcols + ccnt]
+    ctype = CPX_CONTINUOUS;
+    tmp = numcols + ccnt;
+    for (i = numcols; i < tmp; i++) {
+        status = CPXchgctype(env, lp, 1, &i, &ctype);
+        if (status) {
+            fprintf(stderr, "Failed to set slack variable type.\n");
+        }
     }
+
 
 TERMINATE:
 
@@ -200,6 +206,7 @@ TERMINATE:
 
     return status;
 }
+
 
 // Copia i dati del problema lp nel problema cp.
 int copy_prob(CPXENVptr env, CPXLPptr lp, CPXLPptr cp) {
@@ -394,6 +401,7 @@ TERMINATE:
 
     return status;
 }
+
 
 // Permette di creare il problema FMIP partendo dal suo MIP.
 int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
