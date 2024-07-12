@@ -37,6 +37,7 @@
 // 'd', del carattere 'p' e di '\0').
 #define MAX_SLACK_NAMES_LEN 9
 
+
 // Frees up pointer *ptr and sets it to NULL.
 void free_and_null(char** ptr) {
     if (*ptr != NULL) {
@@ -90,7 +91,7 @@ int optimze_and_print_results(CPXENVptr env, CPXLPptr lp, double *x) {
     // Stampo il valore delle variabili.
     // TODO: stampare il vero nome delle variabili.
     for (int i = 0; i < cur_numcols; i++) {
-        printf("x[%d] = %.2f\n", i + 1, x[i]);
+        printf("x[%d] = %.2f\n", i, x[i]);
     }
     
     return status;
@@ -154,7 +155,7 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
     // Inizializzo: coefficienti nella funzione obiettivo; lowerbound; 
     // upperbound; matbeg.
     for (i = 0; i < ccnt; i++) {
-        obj[i] = 0;
+        obj[i] = 0; // Coefficienti nulli.
         lb[i] = 0;
         ub[i] = CPX_INFBOUND;
         matbeg[i] = i * numrows;
@@ -372,7 +373,7 @@ int copy_prob(CPXENVptr env, CPXLPptr lp, CPXLPptr cp) {
     // Ora posso crere la copia del problema MIP in FMIP.
     // TODO: non gestisco rngval (settato a NULL).
     status = CPXcopylp(
-            env, cp, numcols, numrows, CPX_MIN, 
+            env, cp, numcols, numrows, CPXgetobjsen(env, lp), 
             obj, rhs, sense, matbeg, matcnt, matind, matval, lb, ub, NULL
     );
     if (status) {
@@ -403,7 +404,8 @@ TERMINATE:
 }
 
 
-// Permette di creare il problema FMIP partendo dal suo MIP.
+// Permette di creare il problema FMIP partendo dal problema MIP fornito.
+// Non effettua il variable fixing.
 int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
     int i, cnt, status = 0;
     double tmp;
@@ -457,6 +459,15 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
         }
     }
 
+    // Cambio il senso del problema a minimizzazione.
+    if (CPXgetobjsen(env, *fmip) != CPX_MIN) {
+        status = CPXchgobjsen(env, *fmip, CPX_MIN);
+        if (status) {
+            fprintf(stderr, "Failed setting FMIP obj sense.\n");
+            goto TERMINATE;
+        }
+    }
+
     // Fisso il valore di alcune variabili xi.
     // Esempio semplice: ne fisso metà partendo dall'inizio (suppongo che
     // queste var siano tutte intere). Fisso il valore delle variabili al 
@@ -496,10 +507,57 @@ TERMINATE:
     return status;
 }
 
+
+// Permette di creare l'OMIP partendo dal problema MIP fornito.
+int create_omip(CPXENVptr env, CPXLPptr mip, CPXLPptr *omip) {
+    int i, cnt, status = 0;
+    double tmp;
+    
+    int numcols = CPXgetnumcols(env, mip);
+    int numrows = CPXgetnumrows(env, mip);
+
+    *omip = CPXcreateprob(env, &status, "OMIP");
+    if (*omip == NULL) {
+        fprintf(stderr, "Failed to create OMIP.\n");
+        status = 1;
+        goto TERMINATE;
+    }
+
+    status = copy_prob(env, mip, *omip);
+    if (status) {
+        fprintf(stderr, "Failed populate OMIP with MIP data.\n");
+        goto TERMINATE;
+    }
+
+    // Introduco le variabili slack.
+    status = add_slack_cols(env, *omip);
+    if (status) {
+        fprintf(stderr, "Failed to add slack columns to OMIP.\n");
+        goto TERMINATE;
+    }
+    // Nota che il numero di colonne di OMIP non viene aggiornato dopo
+    // aver aggiunto le variabili slack. Ciò significa che numcols indica
+    // il numero di colonne senza considerare le variabili di slack.
+
+
+    // Fisso il valore di alcune variabili xi.
+// ---------------------------------------------------------------------------
+    // TODO: scrivere l'algoritmo che prende la decisione sulle variabili
+    // da fissare. Quello qui sotto è solo un esempio per testare.
+// ---------------------------------------------------------------------------
+
+
+TERMINATE:
+
+    return status;
+
+}
+
+
 int main(int argc, char* argv[]) {
     int solstat; // Solution status.
     //double objval; // Objective value.
-    double *x_mip1 = NULL, *x_mip2 = NULL; // Variabiles value.
+    double *x_mip = NULL, *x_fmip = NULL, *x_omip = NULL; // Variabiles value.
 
     CPXENVptr env = NULL;
     CPXLPptr mip = NULL, fmip = NULL, omip = NULL;
@@ -546,9 +604,16 @@ int main(int argc, char* argv[]) {
     }
 
     // Optimize MIP and print results
-    //status = optimze_and_print_results(env, mip, x_mip1);
+    //status = optimze_and_print_results(env, mip, x_mip);
     //if (status) {
     //    fprintf(stderr, "Failed to optimize MIP.\n");
+    //    goto TERMINATE;
+    //}
+
+    // Salvo il problema MIP in un file.
+    //status = CPXwriteprob(env, mip, "original_MIP.lp", NULL);
+    //if (status) {
+    //    fprintf (stderr, "Failed to write MIP to disk.\n");
     //    goto TERMINATE;
     //}
 
@@ -561,7 +626,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Optimize fmip and print results.
-    //status = optimze_and_print_results(env, fmip, x_mip2);
+    //status = optimze_and_print_results(env, fmip, x_fmip);
     //if (status) {
     //    fprintf(stderr, "Failed to optimize fmip.\n");
     //    goto TERMINATE;
@@ -570,14 +635,38 @@ int main(int argc, char* argv[]) {
     // Salvo il problema FMIP in un file.
     status = CPXwriteprob(env, fmip, "fmip.lp", NULL);
     if (status) {
-        fprintf (stderr, "Failed to write LP to disk.\n");
+        fprintf (stderr, "Failed to write FMIP to disk.\n");
+        goto TERMINATE;
+    }
+
+// ### Creazione dell'OMIP ###
+    printf("\nCreazione dell'OMIP.\n");
+    status = create_omip(env, mip, &omip);
+    if (status) {
+        fprintf(stderr, "Failed to create OMIP.\n");
+        goto TERMINATE;
+    }
+
+    // Optimize omip and print results.
+    //status = optimze_and_print_results(env, omip, x_omip);
+    //if (status) {
+    //    fprintf(stderr, "Failed to optimize omip.\n");
+    //    goto TERMINATE;
+    //}
+
+    // Salvo il problema OMIP in un file.
+    status = CPXwriteprob(env, omip, "omip.lp", NULL);
+    if (status) {
+        fprintf (stderr, "Failed to write OMIP to disk.\n");
+        goto TERMINATE;
     }
 
 TERMINATE:
 
     // Free up solution.
-    free_and_null((char**) &x_mip1);
-    free_and_null((char**) &x_mip2);
+    free_and_null((char**) &x_mip);
+    free_and_null((char**) &x_fmip);
+    free_and_null((char**) &x_omip);
 
     // Free up the problem allocated by CPXcreateprob, if necessary.
     if (mip != NULL) {
@@ -588,6 +677,13 @@ TERMINATE:
     }
 
     if (fmip != NULL) {
+        status = CPXfreeprob(env, &fmip);
+        if (status) {
+            fprintf(stderr, "CPXfreeprob failed, error code %d.\n", status);
+        }
+    }
+
+    if (omip != NULL) {
         status = CPXfreeprob(env, &fmip);
         if (status) {
             fprintf(stderr, "CPXfreeprob failed, error code %d.\n", status);
