@@ -37,6 +37,8 @@
 // 'd', del carattere 'p' e di '\0').
 #define MAX_SLACK_NAMES_LEN 9
 
+// Lunghezza massima nome variabili.
+#define MAX_COLNAME_LEN 9
 
 // Frees up pointer *ptr and sets it to NULL.
 void free_and_null(char** ptr) {
@@ -44,6 +46,24 @@ void free_and_null(char** ptr) {
         free(*ptr);
         *ptr = NULL;
     }
+}
+
+// Permette di ottenere il nome di una variabile, dato il suo indice.
+// Salva il nome della variabile in colname.
+int get_colname(CPXENVptr env, CPXLPptr lp, int index, char *colname) {
+    int surplus, status = 0;
+    char namestore[MAX_COLNAME_LEN];
+
+    // Ricavo il nome della colonna.
+    status = CPXgetcolname(env, lp, (char**) &namestore, namestore, MAX_COLNAME_LEN, &surplus, index, index);
+    if (status) {
+        fprintf(stderr, "Failed get column name.\n");
+        return status;
+    }
+
+    strncpy(colname, namestore, MAX_COLNAME_LEN);
+
+    return status;
 }
 
 
@@ -54,6 +74,8 @@ int optimze_and_print_results(CPXENVptr env, CPXLPptr lp, double *x) {
     double objval;
     
     int cur_numcols;
+
+    char colname[MAX_COLNAME_LEN];
 
     // Optimize lp and obtain solution.
     status = CPXmipopt(env, lp);
@@ -89,9 +111,12 @@ int optimze_and_print_results(CPXENVptr env, CPXLPptr lp, double *x) {
     }
 
     // Stampo il valore delle variabili.
-    // TODO: stampare il vero nome delle variabili.
-    for (int i = 0; i < cur_numcols; i++) {
-        printf("x[%d] = %.2f\n", i, x[i]);
+    for (int i = 0; i < cur_numcols; i++) { 
+        if (get_colname(env, lp, i, colname) == 0) {
+            printf("Column = %d,\tValue = %.2f,\tVar name = %s\n", i, x[i], colname);
+        } else {
+            printf("Column = %d,\tValue = %.2f,\tVar name = *error*\n", i, x[i]);
+        }
     }
     
     return status;
@@ -209,29 +234,29 @@ TERMINATE:
 }
 
 
-// Copia i dati del problema lp nel problema cp.
-int copy_prob(CPXENVptr env, CPXLPptr lp, CPXLPptr cp) {
+// Copia i dati del problema src nel problema dst.
+int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
     int i, status = 0;
 
-    int numcols = CPXgetnumcols(env, lp);
-    int numrows = CPXgetnumrows(env, lp);
-    int numnz = CPXgetnumnz(env, lp);
+    int numcols = CPXgetnumcols(env, src);
+    int numrows = CPXgetnumrows(env, src);
+    int numnz = CPXgetnumnz(env, src);
 
     double *obj = NULL, *rhs = NULL, *matval = NULL, *ub = NULL, *lb = NULL;
     char *sense = NULL, *xctype = NULL;
     int *matbeg = NULL, *matind = NULL, *matcnt = NULL;
 
     int nzcnt, surplus;
-    // Salvo i coefficienti della funzione obiettivo del problema MIP.
+    // Salvo i coefficienti della funzione obiettivo del problema SRC.
     obj = (double*) malloc(numcols * sizeof(double));
     if (obj == NULL) {
-        fprintf(stderr, "No memory for saving obj of MIP.\n");
+        fprintf(stderr, "No memory for saving obj of SRC.\n");
         goto TERMINATE;
     }
 
-    status = CPXgetobj(env, lp, obj, 0, numcols - 1);
+    status = CPXgetobj(env, src, obj, 0, numcols - 1);
     if (status) {
-        fprintf(stderr, "Failed to copy obj coefficients of MIP into array.\n");
+        fprintf(stderr, "Failed to copy obj coefficients of SRC into array.\n");
         goto TERMINATE;
     }
 
@@ -240,17 +265,17 @@ int copy_prob(CPXENVptr env, CPXLPptr lp, CPXLPptr cp) {
     //    printf("x[%d] = %0.3g\n", i, obj[i]);
     //}
 
-    // Buffer in cui salvo i coefficienti rhs dei vincoli del problema MIP.
+    // Buffer in cui salvo i coefficienti rhs dei vincoli del problema SRC.
     rhs = (double*) malloc(numrows * sizeof(double));
     if (rhs == NULL) {
-        fprintf(stderr, "No memory for saving rhs of MIP.\n");
+        fprintf(stderr, "No memory for saving rhs of SRC.\n");
         status = 1;
         goto TERMINATE;
     }
 
-    status = CPXgetrhs(env, lp, rhs, 0, numrows - 1);
+    status = CPXgetrhs(env, src, rhs, 0, numrows - 1);
     if (status) {
-        fprintf(stderr, "Failed to copy rhs coefficients of MIP into array.\n");
+        fprintf(stderr, "Failed to copy rhs coefficients of SRC into array.\n");
         goto TERMINATE;
     }
 
@@ -259,17 +284,17 @@ int copy_prob(CPXENVptr env, CPXLPptr lp, CPXLPptr cp) {
     //    printf("%0.2f\n", rhs[i]);
     //}
 
-    // Salvo in un buffer il senso dei vincoli del problema MIP.
+    // Salvo in un buffer il senso dei vincoli del problema SRC.
     sense = (char*) malloc(numrows * sizeof(double));
     if (sense == NULL) {
-        fprintf(stderr, "No memory for saving sense of MIP.\n");
+        fprintf(stderr, "No memory for saving sense of SRC.\n");
         status = 1;
         goto TERMINATE;
     }
 
-    status = CPXgetsense(env, lp, sense, 0, numrows - 1);
+    status = CPXgetsense(env, src, sense, 0, numrows - 1);
     if (status) {
-        fprintf(stderr, "Failed to copy sense coefficients of MIP into array.\n");
+        fprintf(stderr, "Failed to copy sense coefficients of SRC into array.\n");
         goto TERMINATE;
     }
 
@@ -278,21 +303,21 @@ int copy_prob(CPXENVptr env, CPXLPptr lp, CPXLPptr cp) {
     //    printf("%c\n", sense[i]);
     //}
 
-    // Salvo i dati della matrice dei vincoli di MIP.
+    // Salvo i dati della matrice dei vincoli di SRC.
     matbeg = (int*) malloc(numcols * sizeof(int));
     matind = (int*) malloc(numnz * sizeof(int));
     matcnt = (int*) malloc(numcols * sizeof(int));
     matval = (double*) malloc(numnz * sizeof(double));
 
     if (matbeg == NULL || matind == NULL || matval == NULL || matcnt == NULL) {
-        fprintf(stderr, "No memory for saving matbeg or matind or matval or matcnt of MIP.\n");
+        fprintf(stderr, "No memory for saving matbeg or matind or matval or matcnt of SRC.\n");
         status = 1;
         goto TERMINATE;
     }
 
-    status = CPXgetcols(env, lp, &nzcnt, matbeg, matind, matval, numnz, &surplus, 0, numcols - 1);
+    status = CPXgetcols(env, src, &nzcnt, matbeg, matind, matval, numnz, &surplus, 0, numcols - 1);
     if (status) {
-        fprintf(stderr, "Failed to copy matbeg or matind or matval coefficients of MIP.\n");
+        fprintf(stderr, "Failed to copy matbeg or matind or matval coefficients of SRC.\n");
         goto TERMINATE;
     }
 
@@ -330,20 +355,20 @@ int copy_prob(CPXENVptr env, CPXLPptr lp, CPXLPptr cp) {
     ub = (double*) malloc(numcols * sizeof(double));
     lb = (double*) malloc(numcols * sizeof(double));
     if (ub == NULL || lb == NULL) {
-        fprintf(stderr, "No memory for saving lower bounds or upper bounds of MIP.\n");
+        fprintf(stderr, "No memory for saving lower bounds or upper bounds of SRC.\n");
         status = 1;
         goto TERMINATE;
     }
 
-    status = CPXgetub(env, lp, ub, 0, numcols - 1);
+    status = CPXgetub(env, src, ub, 0, numcols - 1);
     if (status) {
-        fprintf(stderr, "Failed to copy upper bounds coefficients of MIP.\n");
+        fprintf(stderr, "Failed to copy upper bounds coefficients of SRC.\n");
         goto TERMINATE;
     }
 
-    status = CPXgetlb(env, lp, lb, 0, numcols - 1);
+    status = CPXgetlb(env, src, lb, 0, numcols - 1);
     if (status) {
-        fprintf(stderr, "Failed to copy upper bounds coefficients of MIP.\n");
+        fprintf(stderr, "Failed to copy upper bounds coefficients of SRC.\n");
         goto TERMINATE;
     }
 
@@ -356,35 +381,37 @@ int copy_prob(CPXENVptr env, CPXLPptr lp, CPXLPptr cp) {
     //    printf("%.2f\n", lb[i]);
     //}
     
-    // Salvo la tipologia delle variabili del problema MIP.
+    // Salvo la tipologia delle variabili del problema SRC.
     xctype = (char*) malloc(numcols * sizeof(char));
     if (xctype == NULL) {
-        fprintf(stderr, "No memory for saving variables types of MIP.\n");
+        fprintf(stderr, "No memory for saving variables types of SRC.\n");
         status = 1;
         goto TERMINATE;
     }
 
-    status = CPXgetctype(env, lp, xctype, 0, numcols - 1);
+    status = CPXgetctype(env, src, xctype, 0, numcols - 1);
     if (status) {
-        fprintf(stderr, "Failed to copy upper bounds coefficients of MIP.\n");
+        fprintf(stderr, "Failed to copy upper bounds coefficients of SRC.\n");
         goto TERMINATE;
     }
 
-    // Ora posso crere la copia del problema MIP in FMIP.
+    // Ora posso crere la copia del problema SRC in DST.
     // TODO: non gestisco rngval (settato a NULL).
+    // TODO: non copio il vero nome delle variabili. Per ora non è necessario.
+    //       Ciò implica che prob originale e copia hanno nomi di var diversi.
     status = CPXcopylp(
-            env, cp, numcols, numrows, CPXgetobjsen(env, lp), 
+            env, dst, numcols, numrows, CPXgetobjsen(env, src), 
             obj, rhs, sense, matbeg, matcnt, matind, matval, lb, ub, NULL
     );
     if (status) {
-        fprintf(stderr, "Failed to populate FMIP from MIP.\n");
+        fprintf(stderr, "Failed to populate DST from SRC.\n");
         goto TERMINATE;
     }
 
-    // Setto la tipologia delle variabili del problema FMIP.
-    status = CPXcopyctype(env, cp, xctype);
+    // Setto la tipologia delle variabili del problema DST.
+    status = CPXcopyctype(env, dst, xctype);
     if (status) {
-        fprintf(stderr, "Failed to set variables types of FMIP.\n");
+        fprintf(stderr, "Failed to set variables types of DST.\n");
         goto TERMINATE;
     }
 
