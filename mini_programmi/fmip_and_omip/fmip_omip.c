@@ -177,7 +177,7 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
         matval[i] = (i < nzcnt / 2)? 1 : -1;
     }
 
-    // Ora posso aggiungere le due colonne di slack.
+    // Ora posso aggiungere le colonne di slack.
     status = CPXaddcols(env, lp, ccnt, nzcnt, NULL, matbeg, matind, matval, lb, ub, colnames);
     if (status) {
         fprintf(stderr, "Failed to add new columns to the problem.\n");
