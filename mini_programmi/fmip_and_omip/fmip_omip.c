@@ -23,8 +23,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-// TODO: implementare OMIP.
-
 // Lunghezza massima del nome delle variabili slack (compreso il terminatore
 // di stringa).
 // Delta+ e Delta- sono due vettori di lunghezza uguale al numero delle 
@@ -67,15 +65,9 @@ int get_colname(CPXENVptr env, CPXLPptr lp, int index, char *colname) {
 }
 
 
-int optimze_and_print_results(CPXENVptr env, CPXLPptr lp, double *x) {
+int optimize_prob(CPXENVptr env, CPXLPptr lp, double *objval, int *solstat, double *x, int begin, int end) {
     int status = 0;
-    int solstat;
-
-    double objval;
-    
-    int cur_numcols;
-
-    char colname[MAX_COLNAME_LEN];
+    int numcols = CPXgetnumcols(env, lp);
 
     // Optimize lp and obtain solution.
     status = CPXmipopt(env, lp);
@@ -85,33 +77,25 @@ int optimze_and_print_results(CPXENVptr env, CPXLPptr lp, double *x) {
     }
 
     // Get solution status.
-    solstat = CPXgetstat(env, lp);
-    printf("Solution status %d.\n", status);
+    *solstat = CPXgetstat(env, lp);
 
-    // Print objective value.
-    status = CPXgetobjval(env, lp, &objval);
+    // Get objective value.
+    status = CPXgetobjval(env, lp, objval);
     if (status) {
         fprintf(stderr, "Failed to obtain objective value (lp).\n");
         return status;
     }
-    printf("Objective value: %.10g\n", objval);
 
     // Print variabile values.
-    cur_numcols = CPXgetnumcols(env, lp); // Get number of variabiles.
-    x = (double*) malloc(cur_numcols * sizeof(double));
-    if (x == NULL) {
-        fprintf(stderr, "No memory for solution values for lp.\n");
-        return status;
-    }
-
-    status = CPXgetx(env, lp, x, 0, cur_numcols - 1);
+    status = CPXgetx(env, lp, x, begin, end);
     if (status) {
         fprintf(stderr, "Failed to obtain solution.\n");
         return status;
     }
 
     // Stampo il valore delle variabili.
-    for (int i = 0; i < cur_numcols; i++) { 
+    char colname[MAX_COLNAME_LEN];
+    for (int i = 0; i < numcols; i++) { 
         if (get_colname(env, lp, i, colname) == 0) {
             printf("Column = %d,\tValue = %.2f,\tVar name = %s\n", i, x[i], colname);
         } else {
@@ -160,7 +144,6 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
         status = 1;
         goto TERMINATE;
     }
-
     // Alloco spazio per i nomi.
     for (i = 0; i < ccnt; i++) {
         colnames[i] = (char*) malloc(MAX_SLACK_NAMES_LEN * sizeof(char));
@@ -582,8 +565,8 @@ TERMINATE:
 
 
 int main(int argc, char* argv[]) {
-    int solstat; // Solution status.
-    //double objval; // Objective value.
+    int numcols, solstat; // Solution status.
+    double objval; // Objective value.
     double *x_mip = NULL, *x_fmip = NULL, *x_omip = NULL; // Variabiles value.
 
     CPXENVptr env = NULL;
@@ -630,8 +613,15 @@ int main(int argc, char* argv[]) {
         goto TERMINATE;
     }
 
-    // Optimize MIP and print results
-    //status = optimze_and_print_results(env, mip, x_mip);
+    // Optimize MIP.
+    //numcols = CPXgetnumcols(env, mip); // Get number of variabiles.
+    //x_mip = (double*) malloc(numcols * sizeof(double));
+    //if (x_mip == NULL) {
+    //    fprintf(stderr, "No memory for solution values for MIP.\n");
+    //    goto TERMINATE;
+    //}
+
+    //status = optimize_prob(env, mip, &objval, &solstat, x_mip, 0, numcols - 1);
     //if (status) {
     //    fprintf(stderr, "Failed to optimize MIP.\n");
     //    goto TERMINATE;
@@ -652,10 +642,17 @@ int main(int argc, char* argv[]) {
         goto TERMINATE;
     }
 
-    // Optimize fmip and print results.
-    //status = optimze_and_print_results(env, fmip, x_fmip);
+    // Optimize fmip.
+    //numcols = CPXgetnumcols(env, fmip);
+    //x_fmip= (double*) malloc(numcols * sizeof(double));
+    //if (x_fmip == NULL) {
+    //    fprintf(stderr, "No memory for solution values for FMIP.\n");
+    //    goto TERMINATE;
+    //}
+
+    //status = optimize_prob(env, fmip, &objval, &solstat, x_fmip, 0, numcols - 1);
     //if (status) {
-    //    fprintf(stderr, "Failed to optimize fmip.\n");
+    //    fprintf(stderr, "Failed to optimize FMIP.\n");
     //    goto TERMINATE;
     //}
 
@@ -674,10 +671,17 @@ int main(int argc, char* argv[]) {
         goto TERMINATE;
     }
 
-    // Optimize omip and print results.
-    //status = optimze_and_print_results(env, omip, x_omip);
+    // Optimize omip.
+    //numcols = CPXgetnumcols(env, omip);
+    //x_omip= (double*) malloc(numcols * sizeof(double));
+    //if (x_omip == NULL) {
+    //    fprintf(stderr, "No memory for solution values for OMIP.\n");
+    //    goto TERMINATE;
+    //}
+
+    //status = optimize_prob(env, omip, &objval, &solstat, x_omip, 0, numcols - 1);
     //if (status) {
-    //    fprintf(stderr, "Failed to optimize omip.\n");
+    //    fprintf(stderr, "Failed to optimize OMIP.\n");
     //    goto TERMINATE;
     //}
 
