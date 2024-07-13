@@ -596,7 +596,7 @@ int create_omip(CPXENVptr env, CPXLPptr mip, CPXLPptr *omip, double rhs_slack) {
     }
 
     // Ora posso aggiungere la nuova riga della matrice dei vincoli.
-    status = CPXaddrows(env, *omip, 0, 1, 2 * numrows, &rhs_slack, &sense, &rmatbeg, rmatind, rmatval, NULL, &rowname);
+    status = CPXaddrows(env, *omip, 0, 1, slack_cnt, &rhs_slack, &sense, &rmatbeg, rmatind, rmatval, NULL, &rowname);
     if (status) {
         fprintf(stderr, "Failed to add row to OMIP.\n");
         goto TERMINATE;
