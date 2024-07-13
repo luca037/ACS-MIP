@@ -242,6 +242,7 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
     int *matbeg = NULL, *matind = NULL, *matcnt = NULL;
 
     int nzcnt, surplus;
+
     // Salvo i coefficienti della funzione obiettivo del problema SRC.
     obj = (double*) malloc(numcols * sizeof(double));
     if (obj == NULL) {
@@ -254,11 +255,6 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         fprintf(stderr, "Failed to copy obj coefficients of SRC into array.\n");
         goto TERMINATE;
     }
-
-    //printf("Coefficienti del problema %s:\n", argv[1]);
-    //for (i = 0; i < cur_numcols; i++) {
-    //    printf("x[%d] = %0.3g\n", i, obj[i]);
-    //}
 
     // Buffer in cui salvo i coefficienti rhs dei vincoli del problema SRC.
     rhs = (double*) malloc(numrows * sizeof(double));
@@ -274,11 +270,6 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         goto TERMINATE;
     }
 
-    //printf("Coefficienti rhs vincoli del problema %s:\n", argv[1]);
-    //for (i = 0; i < cur_numrows; i++) {
-    //    printf("%0.2f\n", rhs[i]);
-    //}
-
     // Salvo in un buffer il senso dei vincoli del problema SRC.
     sense = (char*) malloc(numrows * sizeof(double));
     if (sense == NULL) {
@@ -292,11 +283,6 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         fprintf(stderr, "Failed to copy sense coefficients of SRC into array.\n");
         goto TERMINATE;
     }
-
-    //printf("Coefficienti sense vincoli del problema %s:\n", argv[1]);
-    //for (i = 0; i < cur_numrows; i++) {
-    //    printf("%c\n", sense[i]);
-    //}
 
     // Salvo i dati della matrice dei vincoli di SRC.
     matbeg = (int*) malloc(numcols * sizeof(int));
@@ -322,30 +308,6 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
     }
     matcnt[numcols - 1] = nzcnt - matbeg[numcols - 1];
 
-    //printf("matbeg:\n");
-    //for (i = 0; i < cur_numcols; i++) {
-    //    printf("%d, ", matbeg[i]);
-    //}
-    //printf("\n");
-
-    //printf("matind:\n");
-    //for (i = 0; i < cur_numnz; i++) {
-    //    printf("%d, ", matind[i]);
-    //}
-    //printf("\n");
-
-    //printf("matval:\n");
-    //for (i = 0; i < cur_numnz; i++) {
-    //    printf("%0.2f, ", matval[i]);
-    //}
-    //printf("\n");
-
-    //printf("matcnt:\n");
-    //for (i = 0; i < cur_numcols; i++) {
-    //    printf("%d, ", matcnt[i]);
-    //}
-    //printf("\n");
-
     // Salvo i lower bound e upper bound delle variabili.
     ub = (double*) malloc(numcols * sizeof(double));
     lb = (double*) malloc(numcols * sizeof(double));
@@ -367,15 +329,6 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         goto TERMINATE;
     }
 
-    //printf("Coefficienti upper bounds del problema %s\n", argv[1]);
-    //for (i = 0; i < cur_numcols; i++) {
-    //    printf("%.2f\n", ub[i]);
-    //}
-    //printf("Coefficienti lower bounds del problema %s\n", argv[1]);
-    //for (i = 0; i < cur_numcols; i++) {
-    //    printf("%.2f\n", lb[i]);
-    //}
-    
     // Salvo la tipologia delle variabili del problema SRC.
     xctype = (char*) malloc(numcols * sizeof(char));
     if (xctype == NULL) {
