@@ -46,6 +46,17 @@ void free_and_null(char** ptr) {
     }
 }
 
+// Ritorna la somma degli elementi dell'array passato.
+double sum(double *x, int len) {
+    if (len == 0) return 0;
+    double s = x[0];
+    for (int i = 1; i < len; i++) {
+        s += x[i];
+    }
+
+    return s;
+}
+
 // Permette di ottenere il nome di una variabile, dato il suo indice.
 // Salva il nome della variabile in colname.
 int get_colname(CPXENVptr env, CPXLPptr lp, int index, char *colname) {
@@ -65,6 +76,7 @@ int get_colname(CPXENVptr env, CPXLPptr lp, int index, char *colname) {
 }
 
 
+// Ottimizza il problema passato e scrive i risulati nelle variabili passate.
 int optimize_prob(CPXENVptr env, CPXLPptr lp, double *objval, int *solstat, double *x, int begin, int end) {
     int status = 0;
     int numcols = CPXgetnumcols(env, lp);
@@ -144,6 +156,7 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
         status = 1;
         goto TERMINATE;
     }
+
     // Alloco spazio per i nomi.
     for (i = 0; i < ccnt; i++) {
         colnames[i] = (char*) malloc(MAX_SLACK_NAMES_LEN * sizeof(char));
@@ -198,7 +211,6 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
             fprintf(stderr, "Failed to set slack variable type.\n");
         }
     }
-
 
 TERMINATE:
 
@@ -457,10 +469,9 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
     }
 
     // Ora setto i coefficienti delle variabili slack a 1.
-    // Le variabili slack in totale sono 2 * numrows.
-    // Il range di indici delle variabili slack è:
-    //      [numcols, numcols + 2 * numrows]
-    cnt = numcols + 2 * numrows;
+    // Le variabili slack in totale sono 'cnt'.
+    // Gli indici delle variabili slack sono: [numcols, ..., cnt - 1]
+    cnt = CPXgetnumcols(env, *fmip);
     for (i = numcols, tmp = 1; i < cnt; i++) {
         status = CPXchgobj(env, *fmip, 1, &i, &tmp);
         if (status) {
@@ -519,12 +530,19 @@ TERMINATE:
 
 
 // Permette di creare l'OMIP partendo dal problema MIP fornito.
-int create_omip(CPXENVptr env, CPXLPptr mip, CPXLPptr *omip) {
+int create_omip(CPXENVptr env, CPXLPptr mip, CPXLPptr *omip, double rhs_slack) {
     int i, cnt, status = 0;
     double tmp;
     
     int numcols = CPXgetnumcols(env, mip);
     int numrows = CPXgetnumrows(env, mip);
+
+    char sense;
+    char *rowname = "AD";
+
+    int slack_cnt, rmatbeg;
+    int *rmatind = NULL;
+    double *rmatval = NULL;
 
     *omip = CPXcreateprob(env, &status, "OMIP");
     if (*omip == NULL) {
@@ -556,11 +574,40 @@ int create_omip(CPXENVptr env, CPXLPptr mip, CPXLPptr *omip) {
     // da fissare. Quello qui sotto è solo un esempio per testare.
 // ---------------------------------------------------------------------------
 
+    // Aggiungo il vincolo che limita il grado della non ammissibilità.
+    sense = 'L';
+    slack_cnt = CPXgetnumcols(env, *omip) - numcols; // Numero di variabili slack aggiunte.
+
+    rmatbeg = 0;
+    rmatind = (int*) malloc(slack_cnt * sizeof(int));
+    rmatval = (double*) malloc(slack_cnt * sizeof(double));
+    
+    if (rmatind == NULL || rmatval == NULL) {
+        fprintf(stderr, "No memory for adding row to OMIP.\n");
+        status = 1;
+        goto TERMINATE;
+    }
+
+    // Inizializzo i valori di matind e matval.
+    for (i = 0; i < slack_cnt; i++) {
+        rmatind[i] = i + numcols; // Gli indici delle slack: 
+                                  //    [numcols, ..., numcols + slack_cnt - 1]
+        rmatval[i] = 1;
+    }
+
+    // Ora posso aggiungere la nuova riga della matrice dei vincoli.
+    status = CPXaddrows(env, *omip, 0, 1, 2 * numrows, &rhs_slack, &sense, &rmatbeg, rmatind, rmatval, NULL, &rowname);
+    if (status) {
+        fprintf(stderr, "Failed to add row to OMIP.\n");
+        goto TERMINATE;
+    }
 
 TERMINATE:
 
-    return status;
+    free_and_null((char**) &rmatind);
+    free_and_null((char**) &rmatval);
 
+    return status;
 }
 
 
@@ -665,7 +712,7 @@ int main(int argc, char* argv[]) {
 
 // ### Creazione dell'OMIP ###
     printf("\nCreazione dell'OMIP.\n");
-    status = create_omip(env, mip, &omip);
+    status = create_omip(env, mip, &omip, 200);
     if (status) {
         fprintf(stderr, "Failed to create OMIP.\n");
         goto TERMINATE;
