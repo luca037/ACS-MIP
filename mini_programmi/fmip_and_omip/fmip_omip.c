@@ -134,7 +134,7 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
                                        // Tutti i coefficienti sono diversi 
                                        // da zero.
 
-    printf("num slack da aggiungere = %d\n", ccnt);
+    printf("Slack variables to add: %d\n", ccnt);
 
     double *obj = NULL, *lb = NULL, *ub = NULL, *matval = NULL;
     int *matbeg = NULL, *matind = NULL;
@@ -646,7 +646,7 @@ int main(int argc, char* argv[]) {
     }
 
 // ### Creazione del MIP originale (file di input) ###
-    printf("Creazione del mip originale.\n");
+    printf("### Creating MIP ###\n");
     mip = CPXcreateprob(env, &status, argv[1]);
     if (mip == NULL) {
         fprintf(stderr, "Failedto create MIP.\n");
@@ -682,7 +682,7 @@ int main(int argc, char* argv[]) {
     //}
 
 // ### Creazione dell'FMIP ###
-    printf("\nCreazione dell'FMIP.\n");
+    printf("\n### Creating FMIP ###\n");
     status = create_fmip(env, mip, &fmip);
     if (status) {
         fprintf(stderr, "Failed to create FMIP.\n");
@@ -711,7 +711,7 @@ int main(int argc, char* argv[]) {
     }
 
 // ### Creazione dell'OMIP ###
-    printf("\nCreazione dell'OMIP.\n");
+    printf("\n### Creazione OMIP ###\n");
     status = create_omip(env, mip, &omip, 200);
     if (status) {
         fprintf(stderr, "Failed to create OMIP.\n");
