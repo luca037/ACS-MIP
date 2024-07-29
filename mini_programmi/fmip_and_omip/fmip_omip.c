@@ -136,11 +136,10 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
 
     printf("Slack variables to add: %d\n", ccnt);
 
-    double *obj = NULL, *lb = NULL, *ub = NULL, *matval = NULL;
+    double *lb = NULL, *ub = NULL, *matval = NULL;
     int *matbeg = NULL, *matind = NULL;
     char **colnames = NULL;
 
-    obj = (double*) malloc(ccnt * sizeof(double));
     lb = (double*) malloc(ccnt * sizeof(double));
     ub = (double*) malloc(ccnt * sizeof(double));
 
@@ -150,8 +149,8 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
 
     colnames = (char**) malloc(ccnt * sizeof(char*));
 
-    if (obj == NULL || lb == NULL || ub == NULL || 
-        matbeg == NULL || matind == NULL || matval == NULL || colnames == NULL) {
+    if (lb == NULL || ub == NULL || matbeg == NULL 
+        || matind == NULL || matval == NULL || colnames == NULL) {
         fprintf(stderr, "No memory for adding slack variabiles.\n");
         status = 1;
         goto TERMINATE;
@@ -173,10 +172,8 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
         snprintf(colnames[i + numrows], MAX_SLACK_NAMES_LEN, "dn%d", i + 1);
     }
 
-    // Inizializzo: coefficienti nella funzione obiettivo; lowerbound; 
-    // upperbound; matbeg.
+    // Inizializzo: lowerbound; upperbound; matbeg.
     for (i = 0; i < ccnt; i++) {
-        obj[i] = 0; // Coefficienti nulli.
         lb[i] = 0;
         ub[i] = CPX_INFBOUND;
         matbeg[i] = i * numrows;
@@ -214,7 +211,6 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
 
 TERMINATE:
 
-    free_and_null((char**) &obj);
     free_and_null((char**) &lb);
     free_and_null((char**) &ub);
     free_and_null((char**) &matbeg);
