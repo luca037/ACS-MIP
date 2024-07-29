@@ -244,7 +244,7 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         goto TERMINATE;
     }
 
-    // Buffer in cui salvo i coefficienti rhs dei vincoli del problema SRC.
+    // Salvo i coefficienti rhs dei vincoli del problema SRC.
     rhs = (double*) malloc(numrows * sizeof(double));
     if (rhs == NULL) {
         fprintf(stderr, "No memory for saving rhs of SRC.\n");
@@ -258,7 +258,7 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         goto TERMINATE;
     }
 
-    // Salvo in un buffer il senso dei vincoli del problema SRC.
+    // Salvo il senso (>=, <=, =) dei vincoli del problema SRC.
     sense = (char*) malloc(numrows * sizeof(double));
     if (sense == NULL) {
         fprintf(stderr, "No memory for saving sense of SRC.\n");
@@ -410,7 +410,6 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
     }
 
     // Ora setto i coefficienti delle variabili slack a 1.
-    // Le variabili slack in totale sono 'cnt'.
     // Gli indici delle variabili slack sono: [numcols, ..., cnt - 1]
     cnt = CPXgetnumcols(env, *fmip);
     for (i = numcols, tmp = 1; i < cnt; i++) {
