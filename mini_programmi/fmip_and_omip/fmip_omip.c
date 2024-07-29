@@ -136,12 +136,9 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
 
     printf("Slack variables to add: %d\n", ccnt);
 
-    double *lb = NULL, *ub = NULL, *matval = NULL;
+    double *matval = NULL;
     int *matbeg = NULL, *matind = NULL;
     char **colnames = NULL;
-
-    lb = (double*) malloc(ccnt * sizeof(double));
-    ub = (double*) malloc(ccnt * sizeof(double));
 
     matbeg = (int*) malloc(ccnt * sizeof(int));
     matind = (int*) malloc(nzcnt * sizeof(int));
@@ -149,8 +146,7 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
 
     colnames = (char**) malloc(ccnt * sizeof(char*));
 
-    if (lb == NULL || ub == NULL || matbeg == NULL 
-        || matind == NULL || matval == NULL || colnames == NULL) {
+    if (matbeg == NULL || matind == NULL || matval == NULL || colnames == NULL) {
         fprintf(stderr, "No memory for adding slack variabiles.\n");
         status = 1;
         goto TERMINATE;
@@ -172,10 +168,8 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
         snprintf(colnames[i + numrows], MAX_SLACK_NAMES_LEN, "dn%d", i + 1);
     }
 
-    // Inizializzo: lowerbound; upperbound; matbeg.
+    // Inizializzo: matbeg.
     for (i = 0; i < ccnt; i++) {
-        lb[i] = 0;
-        ub[i] = CPX_INFBOUND;
         matbeg[i] = i * numrows;
     }
 
@@ -188,7 +182,7 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
     }
 
     // Ora posso aggiungere le colonne di slack.
-    status = CPXaddcols(env, lp, ccnt, nzcnt, NULL, matbeg, matind, matval, lb, ub, colnames);
+    status = CPXaddcols(env, lp, ccnt, nzcnt, NULL, matbeg, matind, matval, NULL, NULL, colnames);
     if (status) {
         fprintf(stderr, "Failed to add new columns to the problem.\n");
         goto TERMINATE;
@@ -211,8 +205,6 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
 
 TERMINATE:
 
-    free_and_null((char**) &lb);
-    free_and_null((char**) &ub);
     free_and_null((char**) &matbeg);
     free_and_null((char**) &matind);
     free_and_null((char**) &matval);
