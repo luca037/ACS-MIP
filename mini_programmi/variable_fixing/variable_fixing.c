@@ -109,8 +109,33 @@ int init_mip_bds_and_indices(CPXENVptr env, CPXLPptr mip, double *lb, double *ub
 }
 
 // Permette di resettare i bounds del problema.
-// TODO: implemantare funzione.
-int restore_bounds(CPXENVptr env, CPXLPptr lp) {
+// Vengono resettati solamente i bounds delle variabili che sono state fissate.
+// 'lb' e 'ub' hanno dimensione 'numcols'.
+// 'int_indices' contiene gli indici delle variabili intere.
+// 'fixed' indica se l'indice è stato fissato o meno: se fixed[i] == 1, allora
+// index[i] è stata fissata, altrimenti no.
+// 'num_int_vars' è la dimensione di 'int_indices' e 'fixed_indices'.
+int restore_bounds(CPXENVptr env, CPXLPptr lp, double *lb, double *ub, int numcols, int *int_indices, int *fixed_indices, int num_int_vars) {
+    int i, status;
+    char lower = 'L', upper = 'U';
+
+    for (i = 0; i < num_int_vars; i++) {
+        if (fixed_indices[i]) { // Se è stata fissata.
+            // Reset lower bound.
+            status = CPXchgbds(env, lp, 1, &int_indices[i], &lower, &lb[int_indices[i]]);
+            if (status) {
+                fprintf(stderr, "Failed to reset lower bound of variable %d.\n", int_indices[i]);
+                return status;
+            }
+            // Reset upper bound.
+            status = CPXchgbds(env, lp, 1, &int_indices[i], &upper, &ub[int_indices[i]]);
+            if (status) {
+                fprintf(stderr, "Failed to reset upper bound of variable %d.\n", int_indices[i]);
+                return status;
+            }
+        }
+    }
+
     return 0;
 }
 
@@ -175,11 +200,14 @@ int optimize_prob(CPXENVptr env, CPXLPptr lp, double *objval, int *solstat, doub
     // Get objective value.
     status = CPXgetobjval(env, lp, objval);
     if (status) {
-        fprintf(stderr, "Failed to obtain objective value (lp).\n");
+        fprintf(stderr, "Failed to obtain objective value.\n");
         return status;
     }
 
-    // Print variabile values.
+    // Stampo il valore della funzione obiettivo.
+    printf("Objective value: %.2f\n", *objval);
+
+    // Get variables values.
     status = CPXgetx(env, lp, x, begin, end);
     if (status) {
         fprintf(stderr, "Failed to obtain solution.\n");
@@ -187,6 +215,7 @@ int optimize_prob(CPXENVptr env, CPXLPptr lp, double *objval, int *solstat, doub
     }
 
     // Stampo il valore delle variabili.
+    printf("Variables values:\n");
     char colname[MAX_COLNAME_LEN];
     for (int i = 0; i < numcols; i++) { 
         if (get_colname(env, lp, i, colname) == 0) {
@@ -596,7 +625,7 @@ int main(int argc, char* argv[]) {
     srand(5);
 
     // Variabili per le accedere alle soluzioni dei problemi.
-    int numcols_mip, numcols_fomip, solstat; // Solution status.
+    int numcols_mip, numcols_fomip, solstat_fmip, solstat_omip; // Solution status.
     double objval; // Objective value.
     double *x_mip = NULL, *x_fmip = NULL, *x_omip = NULL; // Variabiles value.
 
@@ -741,7 +770,7 @@ int main(int argc, char* argv[]) {
     ub_mip = (double*) malloc(numcols_mip * sizeof(double));
 
     if (int_indices == NULL || fixed_indices == NULL || lb_mip == NULL || ub_mip == NULL) {
-        fprintf(stderr, "No memory for int_indexes, fixed_indexes, lb_mip and ub_mip.\n");
+        fprintf(stderr, "No memory for int_indices, fixed_indices, lb_mip and ub_mip.\n");
         goto TERMINATE;
     }
 
@@ -751,40 +780,62 @@ int main(int argc, char* argv[]) {
         goto TERMINATE;
     }
 
-    // TODO: implemantare il primo cilco risolutivo.
 // ### Inizio ciclo di risoluzione ###
     // Alloco lo spazio per le soluzioni di FMIP.
-    //numcols_fomip = CPXgetnumcols(env, fmip);
-    //x_fmip= (double*) malloc(numcols_fomip * sizeof(double));
-    //if (x_fmip == NULL) {
-    //    fprintf(stderr, "No memory for solution values for FMIP.\n");
-    //    goto TERMINATE;
-    //}
+    numcols_fomip = CPXgetnumcols(env, fmip);
+    x_fmip = (double*) malloc(numcols_fomip * sizeof(double));
+    if (x_fmip == NULL) {
+        fprintf(stderr, "No memory for solution values for FMIP.\n");
+        goto TERMINATE;
+    }
 
     // Risolvo l'FMIP: massimo 'MAX_ATTEMPTS' tentativi.
-    //for (i = 0; i < MAX_ATTEMPTS; i++) {
-    //    // Fisso le variabili di FMIP.
-    //    printf("\n### Variable fixing su FMIP ###\n");
-    //    bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a zero.
-    //    status = variable_fixing(env, fmip, int_indices, fixed_indices, num_int_vars);
-    //    if (status) {
-    //        fprintf(stderr, "Failed to fix variables of FMIP.\n");
-    //        goto TERMINATE;
-    //    }
+    for (i = 0; i < MAX_ATTEMPTS; i++) {
+        // Fisso le variabili di FMIP.
+        printf("\n### Variable fixing su FMIP - Tentativo %d ###\n", i);
+        bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a zero.
+        status = variable_fixing(env, fmip, int_indices, fixed_indices, num_int_vars);
+        if (status) {
+            fprintf(stderr, "Failed to fix variables of FMIP.\n");
+            goto TERMINATE;
+        }
 
-    //    status = optimize_prob(env, fmip, &objval, &solstat, x_fmip, 0, numcols_fomip - 1);
-    //    if (status) {
-    //        fprintf(stderr, "Failed to optimize FMIP.\n");
-    //        if (solstat == CPXMIP_INFEASIBLE) {
-    //            printf("Non esiste soluzione del problema.\n");
-    //        }
-    //        goto TERMINATE;
-    //    }
+        // Stampa indice variabili fissate.
+        //printf("Indici variabili fissate:\n");
+        //for (j = 0; j < num_int_vars; j++) {
+        //    if (fixed_indices[j])
+        //        printf("indice var fissata -> %d\n", int_indices[j]);
+        //}
+        //printf("\n");
 
-    //    if (solstat == CPXMIP_OPTIMAL) {
-    //        printf("Trovata soluzione ottima.\n");
-    //    } 
-    //}
+        // Ottimizzo FMIP.
+        status = optimize_prob(env, fmip, &objval, &solstat_fmip, x_fmip, 0, numcols_fomip - 1);
+        if (status) {
+            if (solstat_fmip == CPXMIP_INFEASIBLE) {
+                printf("Non esiste soluzione del problema FMIP.\n");
+                // Restore dei bounds di FMIP.
+                printf("\n### Restore bounds di FMIP ###\n");
+                status = restore_bounds(env, fmip, lb_mip, ub_mip, numcols_mip, int_indices, fixed_indices, num_int_vars);
+                if (status) {
+                    fprintf (stderr, "Failed to restore FMIP bounds.\n");
+                    goto TERMINATE;
+                }
+                continue;
+            } else {
+                fprintf(stderr, "Failed to optimize FMIP.\n");
+                goto TERMINATE;
+            }
+        }
+
+        if (solstat_fmip == CPXMIP_OPTIMAL) {
+            printf("Trovata soluzione ottima.\n");
+            break;
+        } 
+    }
+
+    if (solstat_fmip != CPXMIP_OPTIMAL) {
+        printf("Nessuno dei problemi FMIP creati era risolvibile.\n");
+    }
 
 TERMINATE:
 
