@@ -28,6 +28,10 @@
 // Lunghezza massima nome variabili.
 #define MAX_COLNAME_LEN 9
 
+// Numero di tentativi che vengono effettuati per risolvere un problema che
+// risolta non risolvibile.
+#define MAX_ATTEMPTS 5
+
 // Frees up pointer *ptr and sets it to NULL.
 void free_and_null(char** ptr) {
     if (*ptr != NULL) {
@@ -63,6 +67,50 @@ int get_colname(CPXENVptr env, CPXLPptr lp, int index, char *colname) {
 
     strncpy(colname, namestore, MAX_COLNAME_LEN);
 
+    return 0;
+}
+
+// Inizializza i vettori di lb, ub e il vettore contenente le variabili intere
+// del problema mip passato.
+// 'lb' e 'ub' devono avere dimensione 'numcols'.
+// 'int_indices' deve avere dimensione 'num_int_vars'.
+int init_mip_bds_and_indices(CPXENVptr env, CPXLPptr mip, double *lb, double *ub, int numcols, int *int_indices, int num_int_vars) {
+    int i, j, status;
+
+    // Salvo gli indici delle variabili intere di MIP.
+    for (i = 0, j = 0; i < numcols; i++) {
+        char type;
+        status = CPXgetctype(env, mip, &type, i, i);
+        if (status) {
+            fprintf(stderr, "Failed to get variable %d type.", i);
+            return status;
+        }
+
+        if (type == CPX_BINARY || type == CPX_INTEGER) {
+            int_indices[j] = i; // Salvo l'indice della variabile.
+            j += 1;
+        }
+    }
+
+    // Salvo lb e up di MIP.
+    status = CPXgetub(env, mip, ub, 0, numcols - 1);
+    if (status) {
+        fprintf(stderr, "Failed to copy upper bounds coefficients of SRC.\n");
+        return status;
+    }
+
+    status = CPXgetlb(env, mip, lb, 0, numcols - 1);
+    if (status) {
+        fprintf(stderr, "Failed to copy upper bounds coefficients of SRC.\n");
+        return status;
+    }
+
+    return 0;
+}
+
+// Permette di resettare i bounds del problema.
+// TODO: implemantare funzione.
+int restore_bounds(CPXENVptr env, CPXLPptr lp) {
     return 0;
 }
 
@@ -541,21 +589,25 @@ TERMINATE:
 
 
 int main(int argc, char* argv[]) {
+    CPXENVptr env = NULL;
+    CPXLPptr mip = NULL, fmip = NULL, omip = NULL;
+
     // Setto il seme.
     srand(5);
 
-    int numcols, solstat; // Solution status.
+    // Variabili per le accedere alle soluzioni dei problemi.
+    int numcols_mip, numcols_fomip, solstat; // Solution status.
     double objval; // Objective value.
     double *x_mip = NULL, *x_fmip = NULL, *x_omip = NULL; // Variabiles value.
 
-    int *int_indexes = NULL; // Indici delle variabili intere (variable fixing).
-    int *fixed_indexes = NULL; // Indici delle variabili che sono state fissate.
-    int indexes_size; // Dimensione dei due array.
+    // Variabili per il variable fixing dei problemi.
+    int *int_indices = NULL; // Indici delle variabili intere (variable fixing).
+    int *fixed_indices = NULL; // Indici delle variabili che sono state fissate.
+    int num_int_vars; // Dimensione dei due array.
+    double *lb_mip = NULL, *ub_mip = NULL; // Necessari per resettare i lb e ub
+                                        // dopo un variable fixing.
 
-    CPXENVptr env = NULL;
-    CPXLPptr mip = NULL, fmip = NULL, omip = NULL;
-    int i, j, status;
-    int cur_numcols, cur_numrows, cur_numnz;
+    int i, j, cnt, status;
 
     // Check command line arguments.
     if (argc != 2) {
@@ -625,20 +677,6 @@ int main(int argc, char* argv[]) {
         goto TERMINATE;
     }
 
-    // Optimize fmip.
-    //numcols = CPXgetnumcols(env, fmip);
-    //x_fmip= (double*) malloc(numcols * sizeof(double));
-    //if (x_fmip == NULL) {
-    //    fprintf(stderr, "No memory for solution values for FMIP.\n");
-    //    goto TERMINATE;
-    //}
-
-    //status = optimize_prob(env, fmip, &objval, &solstat, x_fmip, 0, numcols - 1);
-    //if (status) {
-    //    fprintf(stderr, "Failed to optimize FMIP.\n");
-    //    goto TERMINATE;
-    //}
-
     // Salvo il problema FMIP in un file.
     //status = CPXwriteprob(env, fmip, "fmip.lp", NULL);
     //if (status) {
@@ -675,9 +713,10 @@ int main(int argc, char* argv[]) {
     //    goto TERMINATE;
     //}
  
-    // Trovo quante sono le variabili intere.
-    numcols = CPXgetnumcols(env, mip);
-    for (i = 0, indexes_size = 0; i < numcols; i++) {
+// ### Inizializzazione array con informazioni problema MIP ###
+    // Trovo quante sono le variabili intere di MIP.
+    numcols_mip = CPXgetnumcols(env, mip);
+    for (i = 0, num_int_vars = 0; i < numcols_mip; i++) {
         char type;
 
         status = CPXgetctype(env, mip, &type, i, i);
@@ -689,52 +728,63 @@ int main(int argc, char* argv[]) {
         // TODO: Da capire cosa sono le semi-integer variables e se devo
         //       considerarle.
         if (type == CPX_BINARY || type == CPX_INTEGER) {
-            indexes_size += 1;
+            num_int_vars += 1;
         }
     }
 
-    // Salvo gli indici delle variabili intere di MIP.
-    int_indexes = (int*) malloc(indexes_size * sizeof(int));
-    fixed_indexes = (int*) malloc(indexes_size * sizeof(int));
-    if (int_indexes == NULL || fixed_indexes == NULL) {
-        fprintf(stderr, "No memory for int_indexes and fixed_indexes.\n");
+    // Inizializzo i vettori contenenti le informazioni del problema MIP:
+    // lower bound, upper bound e indici delle variabili intere.
+    int_indices = (int*) malloc(num_int_vars * sizeof(int));
+    fixed_indices = (int*) malloc(num_int_vars * sizeof(int));
+
+    lb_mip = (double*) malloc(numcols_mip * sizeof(double));
+    ub_mip = (double*) malloc(numcols_mip * sizeof(double));
+
+    if (int_indices == NULL || fixed_indices == NULL || lb_mip == NULL || ub_mip == NULL) {
+        fprintf(stderr, "No memory for int_indexes, fixed_indexes, lb_mip and ub_mip.\n");
         goto TERMINATE;
     }
 
-    for (i = 0, j = 0; i < numcols; i++) {
-        char type;
-
-        status = CPXgetctype(env, mip, &type, i, i);
-        if (status) {
-            fprintf(stderr, "Failed to get variable %d type.", i);
-            goto TERMINATE;
-        }
-
-        if (type == CPX_BINARY || type == CPX_INTEGER) {
-            int_indexes[j] = i; // Salvo l'indice della variabile.
-            j += 1;
-        }
-    }
-
-    // Variabile fixig su FMIP.
-    bzero(fixed_indexes, indexes_size * sizeof(int)); // Inizializzo a zero.
-    status = variable_fixing(env, fmip, int_indexes, fixed_indexes, indexes_size);
+    status = init_mip_bds_and_indices(env, mip, lb_mip, ub_mip, numcols_mip, int_indices, num_int_vars);
     if (status) {
-        fprintf(stderr, "Failed to fix variables of FMIP.\n");
+        fprintf(stderr, "Failed to initialize arrays with MIP information.\n");
         goto TERMINATE;
     }
 
-    //printf("Indici var intere:\n"); 
-    //for (i = 0; i < indexes_size; i++) {
-    //    printf("%d ", int_indexes[i]);
+    // TODO: implemantare il primo cilco risolutivo.
+// ### Inizio ciclo di risoluzione ###
+    // Alloco lo spazio per le soluzioni di FMIP.
+    //numcols_fomip = CPXgetnumcols(env, fmip);
+    //x_fmip= (double*) malloc(numcols_fomip * sizeof(double));
+    //if (x_fmip == NULL) {
+    //    fprintf(stderr, "No memory for solution values for FMIP.\n");
+    //    goto TERMINATE;
     //}
-    //printf("\n");
 
-    //printf("Fissate:\n"); 
-    //for (i = 0; i < indexes_size; i++) {
-    //    printf("%d ", fixed_indexes[i]);
+    // Risolvo l'FMIP: massimo 'MAX_ATTEMPTS' tentativi.
+    //for (i = 0; i < MAX_ATTEMPTS; i++) {
+    //    // Fisso le variabili di FMIP.
+    //    printf("\n### Variable fixing su FMIP ###\n");
+    //    bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a zero.
+    //    status = variable_fixing(env, fmip, int_indices, fixed_indices, num_int_vars);
+    //    if (status) {
+    //        fprintf(stderr, "Failed to fix variables of FMIP.\n");
+    //        goto TERMINATE;
+    //    }
+
+    //    status = optimize_prob(env, fmip, &objval, &solstat, x_fmip, 0, numcols_fomip - 1);
+    //    if (status) {
+    //        fprintf(stderr, "Failed to optimize FMIP.\n");
+    //        if (solstat == CPXMIP_INFEASIBLE) {
+    //            printf("Non esiste soluzione del problema.\n");
+    //        }
+    //        goto TERMINATE;
+    //    }
+
+    //    if (solstat == CPXMIP_OPTIMAL) {
+    //        printf("Trovata soluzione ottima.\n");
+    //    } 
     //}
-    //printf("\n");
 
 TERMINATE:
 
@@ -742,7 +792,10 @@ TERMINATE:
     free_and_null((char**) &x_mip);
     free_and_null((char**) &x_fmip);
     free_and_null((char**) &x_omip);
-    free_and_null((char**) &int_indexes);
+    free_and_null((char**) &int_indices);
+    free_and_null((char**) &fixed_indices);
+    free_and_null((char**) &lb_mip);
+    free_and_null((char**) &ub_mip);
 
     // Free up the problem allocated by CPXcreateprob, if necessary.
     if (mip != NULL) {
