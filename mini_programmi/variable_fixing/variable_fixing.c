@@ -25,7 +25,7 @@
 // 'd', del carattere 'p' e di '\0').
 #define MAX_SLACK_NAMES_LEN 9
 
-// Lunghezza massima nome variabili.
+// Lunghezza massima nome variabili e vincoli.
 #define MAX_COLNAME_LEN 9
 
 // Numero di tentativi che vengono effettuati per risolvere un problema che
@@ -339,12 +339,58 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
     char *sense = NULL, *xctype = NULL;
     int *matbeg = NULL, *matind = NULL, *matcnt = NULL;
 
+    char **colnames = NULL, **rownames = NULL;
+    char *colnamestore = NULL, *rownamestore = NULL;
+
     int nzcnt, surplus;
+
+    // Salvo i nomi delle variabili di SRC.
+    status = CPXgetcolname(env, src, NULL, NULL, 0, &surplus, 0, numcols - 1);
+    if (status != CPXERR_NEGATIVE_SURPLUS) {
+        fprintf(stderr, "Failed to get columns names size.\n");
+        goto TERMINATE;
+    }
+
+    colnamestore = (char*) malloc(-surplus * sizeof(char));
+    colnames = (char**) malloc(numcols * sizeof(char*));
+    if (colnames == NULL || colnamestore == NULL) {
+        fprintf(stderr, "No memory for saving variables names of SRC.\n");
+        status = 1;
+        goto TERMINATE;
+    }
+
+    status = CPXgetcolname(env, src, colnames, colnamestore, -surplus, &surplus, 0, numcols - 1);
+    if (status) {
+        fprintf(stderr, "Failed to get variables names of SRC.\n");
+        goto TERMINATE;
+    }
+
+    // Salvo i nomi dei vincoli di SRC.
+    status = CPXgetrowname(env, src, NULL, NULL, 0, &surplus, 0, numrows - 1);
+    if (status != CPXERR_NEGATIVE_SURPLUS) {
+        fprintf(stderr, "Failed to get constraints names size.\n");
+        goto TERMINATE;
+    }
+
+    rownamestore = (char*) malloc(-surplus * sizeof(char));
+    rownames = (char**) malloc(numrows * sizeof(char*));
+    if (rownames == NULL || rownamestore == NULL) {
+        fprintf(stderr, "No memory for saving constraints names of SRC.\n");
+        status = 1;
+        goto TERMINATE;
+    }
+
+    status = CPXgetrowname(env, src, rownames, rownamestore, -surplus, &surplus, 0, numrows - 1);
+    if (status) {
+        fprintf(stderr, "Failed to get constraints names of SRC.\n");
+        goto TERMINATE;
+    }
 
     // Salvo i coefficienti della funzione obiettivo del problema SRC.
     obj = (double*) malloc(numcols * sizeof(double));
     if (obj == NULL) {
         fprintf(stderr, "No memory for saving obj of SRC.\n");
+        status = 1;
         goto TERMINATE;
     }
 
@@ -443,11 +489,10 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
 
     // Ora posso crere la copia del problema SRC in DST.
     // TODO: non gestisco rngval (settato a NULL).
-    // TODO: non copio il vero nome delle variabili. Per ora non è necessario.
-    //       Ciò implica che prob originale e copia hanno nomi di var diversi.
-    status = CPXcopylp(
+    status = CPXcopylpwnames(
             env, dst, numcols, numrows, CPXgetobjsen(env, src), 
-            obj, rhs, sense, matbeg, matcnt, matind, matval, lb, ub, NULL
+            obj, rhs, sense, matbeg, matcnt, matind, matval, lb, ub, NULL,
+            colnames, rownames
     );
     if (status) {
         fprintf(stderr, "Failed to populate DST from SRC.\n");
@@ -472,6 +517,10 @@ TERMINATE:
     free_and_null((char**) &ub);
     free_and_null((char**) &lb);
     free_and_null(&xctype);
+    free_and_null((char**) &colnames);
+    free_and_null(&colnamestore);
+    free_and_null((char**) &rownames);
+    free_and_null(&rownamestore);
 
     return 0;
 }
