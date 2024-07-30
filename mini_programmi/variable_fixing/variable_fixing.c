@@ -1,9 +1,6 @@
 /*
  * Prima implementazione della funzione che fissa il valore delle variabili
  * di un problema.
- * Questa prima versione fissa il 50% delle variabili intere al loro valore
- * di Upper bound.
- *
  */
 
 #include <ilcplex/cplex.h>
