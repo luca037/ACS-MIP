@@ -681,7 +681,7 @@ int main(int argc, char* argv[]) {
     int *fixed_indices = NULL; // Indici delle variabili che sono state fissate.
     int num_int_vars; // Dimensione dei due array.
     double *lb_mip = NULL, *ub_mip = NULL; // Necessari per resettare i lb e ub
-                                        // dopo un variable fixing.
+                                           // dopo un variable fixing.
 
     int i, j, tmp, cnt, status;
     double slack_sum;
@@ -828,7 +828,6 @@ int main(int argc, char* argv[]) {
         goto TERMINATE;
     }
 
-// ### Inizio ciclo di risoluzione ###
     // Alloco lo spazio per le soluzioni di FMIP.
     numcols_submip = CPXgetnumcols(env, fmip);
     x_fmip = (double*) malloc(numcols_submip * sizeof(double));
@@ -837,114 +836,121 @@ int main(int argc, char* argv[]) {
         goto TERMINATE;
     }
 
-    // Risolvo l'FMIP: massimo 'MAX_ATTEMPTS' tentativi.
-    for (i = 0; i < MAX_ATTEMPTS; i++) {
-        // Fisso le variabili di FMIP.
-        printf("\n### Variable fixing su FMIP - Tentativo %d ###\n", i);
-        bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a zero.
-        status = variable_fixing(env, fmip, int_indices, fixed_indices, num_int_vars);
-        if (status) {
-            fprintf(stderr, "Failed to fix variables of FMIP.\n");
-            goto TERMINATE;
-        }
-
-        // Stampa indice variabili fissate.
-        //printf("Indici variabili fissate:\n");
-        //for (j = 0; j < num_int_vars; j++) {
-        //    if (fixed_indices[j])
-        //        printf("indice var fissata -> %d\n", int_indices[j]);
-        //}
-        //printf("\n");
-
-        // Ottimizzo FMIP.
-        status = optimize_prob(env, fmip, &objval_fmip, &solstat_fmip, x_fmip, 0, numcols_submip - 1);
-        if (status) {
-            if (solstat_fmip == CPXMIP_INFEASIBLE) {
-                printf("Non esiste soluzione del problema FMIP.\n");
-                // Restore dei bounds di FMIP.
-                printf("\n### Restore bounds di FMIP ###\n");
-                status = restore_bounds(env, fmip, lb_mip, ub_mip, numcols_mip, int_indices, fixed_indices, num_int_vars);
-                if (status) {
-                    fprintf (stderr, "Failed to restore FMIP bounds.\n");
-                    goto TERMINATE;
-                }
-                continue;
-            } else {
-                fprintf(stderr, "Failed to optimize FMIP.\n Solution status: %d", solstat_fmip);
-                goto TERMINATE;
-            }
-        }
-
-        if (solstat_fmip == CPXMIP_OPTIMAL) {
-            printf("Trovata soluzione ottima.\n");
-            break;
-        } 
-    }
-
-    // Se nessun FMIP è stato risolto esco.
-    if (solstat_fmip != CPXMIP_OPTIMAL) {
-        printf("Nessuno dei problemi FMIP creati era risolvibile.\n");
-        goto TERMINATE;
-    }
-    // TODO: gestire il caso in cui objval_fmip è zero: cosa faccio?
-
-    // Alloco lo spazio per le soluzioni di FMIP.
+    // Alloco lo spazio per le soluzioni di OMIP.
     x_omip = (double*) malloc(numcols_submip * sizeof(double));
     if (x_omip == NULL) {
         fprintf(stderr, "No memory for solution values for OMIP.\n");
         goto TERMINATE;
     }
 
-    // Aggiorno il valore rhs del vincolo sulle slack di OMIP.
-    tmp = CPXgetnumrows(env, omip) - 1;
-    status = CPXchgrhs(env, omip, 1, &tmp, &objval_fmip);
-    if (status) {
-        fprintf(stderr, "Failed to update rhs value of OMIP.\n");
-        goto TERMINATE;
-    }
+// ### Inizio ciclo di risoluzione ###
+    printf("\nInizio ciclo risolutivo.\n");
+    for (cnt = 0; ; cnt++) {
+        printf("\n### Ciclo risolutivo %d ###", cnt);
+        // Risolvo l'FMIP: massimo 'MAX_ATTEMPTS' tentativi.
+        for (i = 0; i < MAX_ATTEMPTS; i++) {
+            // Fisso le variabili di FMIP.
+            printf("\n### Variable fixing su FMIP - Tentativo %d ###\n", i);
+            bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a zero.
+            status = variable_fixing(env, fmip, int_indices, fixed_indices, num_int_vars);
+            if (status) {
+                fprintf(stderr, "Failed to fix variables of FMIP.\n");
+                goto TERMINATE;
+            }
 
-    // Risolvo l'OMIP: massimo 'MAX_ATTEMPTS' tentativi.
-    for (i = 0; i < MAX_ATTEMPTS; i++) {
-        // Fisso le variabili di OMIP.
-        printf("\n### Variable fixing su OMIP - Tentativo %d ###\n", i);
-        bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a zero.
-        status = variable_fixing(env, omip, int_indices, fixed_indices, num_int_vars);
+            // Stampa indice variabili fissate.
+            //printf("Indici variabili fissate:\n");
+            //for (j = 0; j < num_int_vars; j++) {
+            //    if (fixed_indices[j])
+            //        printf("indice var fissata -> %d\n", int_indices[j]);
+            //}
+            //printf("\n");
+
+            // Ottimizzo FMIP.
+            status = optimize_prob(env, fmip, &objval_fmip, &solstat_fmip, x_fmip, 0, numcols_submip - 1);
+            if (status) {
+                if (solstat_fmip == CPXMIP_INFEASIBLE) {
+                    printf("Non esiste soluzione del problema FMIP.\n");
+                    // Restore dei bounds di FMIP.
+                    printf("\nRestore bounds di FMIP.\n");
+                    status = restore_bounds(env, fmip, lb_mip, ub_mip, numcols_mip, int_indices, fixed_indices, num_int_vars);
+                    if (status) {
+                        fprintf (stderr, "Failed to restore FMIP bounds.\n");
+                        goto TERMINATE;
+                    }
+                    continue;
+                } else {
+                    fprintf(stderr, "Failed to optimize FMIP.\n Solution status: %d", solstat_fmip);
+                    goto TERMINATE;
+                }
+            }
+
+            // Se ho trovato una soluzione ottima.
+            if (solstat_fmip == CPXMIP_OPTIMAL || solstat_fmip == CPXMIP_OPTIMAL_TOL) {
+                printf("Trovata soluzione ottima.\n");
+                break;
+            } 
+        }
+
+        // Se nessun FMIP è stato risolto esco.
+        if (solstat_fmip == CPXMIP_INFEASIBLE) {
+            printf("Nessuno dei problemi FMIP creati era risolvibile.\n");
+            break;
+        }
+        // TODO: gestire il caso in cui objval_fmip è zero: cosa faccio?
+
+        // Aggiorno il valore rhs del vincolo sulle slack di OMIP.
+        tmp = CPXgetnumrows(env, omip) - 1;
+        status = CPXchgrhs(env, omip, 1, &tmp, &objval_fmip);
         if (status) {
-            fprintf(stderr, "Failed to fix variables of FMIP.\n");
+            fprintf(stderr, "Failed to update rhs value of OMIP.\n");
             goto TERMINATE;
         }
 
-        // Ottimizzo OMIP.
-        status = optimize_prob(env, omip, &objval_omip, &solstat_omip, x_omip, 0, numcols_submip - 1);
-        if (status) {
-            if (solstat_omip == CPXMIP_INFEASIBLE) {
-                printf("Non esiste soluzione del problema OMIP.\n");
-                // Restore dei bounds di OMIP.
-                printf("\n### Restore bounds di OMIP ###\n");
-                status = restore_bounds(env, omip, lb_mip, ub_mip, numcols_mip, int_indices, fixed_indices, num_int_vars);
-                if (status) {
-                    fprintf (stderr, "Failed to restore OMIP bounds.\n");
-                    goto TERMINATE;
-                }
-                continue;
-            } else {
-                fprintf(stderr, "Failed to optimize OMIP.\n Solution status: %d", solstat_omip);
+        // Risolvo l'OMIP: massimo 'MAX_ATTEMPTS' tentativi.
+        for (i = 0; i < MAX_ATTEMPTS; i++) {
+            // Fisso le variabili di OMIP.
+            printf("\n### Variable fixing su OMIP - Tentativo %d ###\n", i);
+            bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a zero.
+            status = variable_fixing(env, omip, int_indices, fixed_indices, num_int_vars);
+            if (status) {
+                fprintf(stderr, "Failed to fix variables of FMIP.\n");
                 goto TERMINATE;
             }
+
+            // Ottimizzo OMIP.
+            status = optimize_prob(env, omip, &objval_omip, &solstat_omip, x_omip, 0, numcols_submip - 1);
+            if (status) {
+                if (solstat_omip == CPXMIP_INFEASIBLE) {
+                    printf("Non esiste soluzione del problema OMIP.\n");
+                    // Restore dei bounds di OMIP.
+                    printf("\n### Restore bounds di OMIP ###\n");
+                    status = restore_bounds(env, omip, lb_mip, ub_mip, numcols_mip, int_indices, fixed_indices, num_int_vars);
+                    if (status) {
+                        fprintf (stderr, "Failed to restore OMIP bounds.\n");
+                        goto TERMINATE;
+                    }
+                    continue;
+                } else {
+                    fprintf(stderr, "Failed to optimize OMIP.\n Solution status: %d", solstat_omip);
+                    goto TERMINATE;
+                }
+            }
+
+            // Se ho trovato una soluzione ottima.
+            if (solstat_omip == CPXMIP_OPTIMAL || solstat_omip == CPXMIP_OPTIMAL_TOL) {
+                printf("Trovata soluzione ottima.\n");
+                goto TERMINATE;
+            }
+            // TODO: devono essere gestiti anche gli altri status che forniscono
+            //       una soluzione ottima.
         }
 
-        if (solstat_omip == CPXMIP_OPTIMAL) {
-            printf("Trovata soluzione ottima.\n");
+        // Se nessun OMIP è stato risolto esco.
+        if (solstat_fmip == CPXMIP_INFEASIBLE) {
+            printf("Nessuno dei problemi OMIP creati era risolvibile.\n");
             break;
         }
-        // TODO: devono essere gestiti anche gli altri status che forniscono
-        //       una soluzione ottima.
-    }
-
-    // Se nessun OMIP è stato risolto esco.
-    if (solstat_omip != CPXMIP_OPTIMAL) {
-        printf("Nessuno dei problemi OMIP creati era risolvibile.\n");
-        goto TERMINATE;
     }
 
 TERMINATE:
