@@ -29,6 +29,9 @@
 // risolta non risolvibile.
 #define MAX_ATTEMPTS 30
 
+// Massimo numero nodi esplorabili in un problema.
+#define NODE_LIMIT 100000
+
 // Frees up pointer *ptr and sets it to NULL.
 void free_and_null(char** ptr) {
     if (*ptr != NULL) {
@@ -689,6 +692,8 @@ int main(int argc, char* argv[]) {
         goto TERMINATE;
     }
 
+    printf("INPUT FILE: %s\n", argv[1]);
+
     // Inizialize the CPLEX environment.
     env = CPXopenCPLEX(&status);
     if (env == NULL) {
@@ -706,8 +711,15 @@ int main(int argc, char* argv[]) {
         goto TERMINATE;
     }
 
+    // Set limit to explorable nodes.
+    status = CPXsetintparam(env, CPX_PARAM_NODELIM, NODE_LIMIT);
+    if (status) {
+        fprintf(stderr, "Failure to set node limit, error %d\n", status);
+        goto TERMINATE;
+    }
+
 // ### Creazione del MIP originale (file di input) ###
-    printf("### Creating MIP ###\n");
+    printf("\n### Creating MIP ###\n");
     mip = CPXcreateprob(env, &status, argv[1]);
     if (mip == NULL) {
         fprintf(stderr, "Failedto create MIP.\n");
@@ -843,11 +855,10 @@ int main(int argc, char* argv[]) {
 // ### Inizio ciclo di risoluzione ###
     printf("\nInizio ciclo risolutivo.\n");
     for (cnt = 0; cnt < 5; cnt++) {
-        printf("\n### Ciclo risolutivo %d ###", cnt);
         // Risolvo l'FMIP: massimo 'MAX_ATTEMPTS' tentativi.
         for (i = 0; i < MAX_ATTEMPTS; i++) {
             // Fisso le variabili di FMIP.
-            printf("\n### Variable fixing su FMIP - Tentativo %d ###\n", i);
+            printf("\n### Variable fixing su FMIP - Tentativo %d - Run %d ###\n", i, cnt);
             bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a zero.
             if (cnt == 0) { // Genero l'initial vector al primo ciclo.
                 status = variable_fixing(env, fmip, int_indices, fixed_indices, num_int_vars, ub_mip);
@@ -873,7 +884,7 @@ int main(int argc, char* argv[]) {
                 if (solstat_fmip == CPXMIP_INFEASIBLE) {
                     printf("Non esiste soluzione del problema FMIP.\n");
                     // Restore dei bounds di FMIP.
-                    printf("\nRestore bounds di FMIP.\n");
+                    printf("Restore bounds di FMIP.\n");
                     status = restore_bounds(env, fmip, lb_mip, ub_mip, numcols_mip, int_indices, fixed_indices, num_int_vars);
                     if (status) {
                         fprintf (stderr, "Failed to restore FMIP bounds.\n");
@@ -881,7 +892,7 @@ int main(int argc, char* argv[]) {
                     }
                     continue;
                 } else {
-                    fprintf(stderr, "Failed to optimize FMIP.\n Solution status: %d", solstat_fmip);
+                    fprintf(stderr, "Failed to optimize FMIP.\nSolution status: %d", solstat_fmip);
                     goto TERMINATE;
                 }
             }
@@ -911,7 +922,7 @@ int main(int argc, char* argv[]) {
         // Risolvo l'OMIP: massimo 'MAX_ATTEMPTS' tentativi.
         for (i = 0; i < MAX_ATTEMPTS; i++) {
             // Fisso le variabili di OMIP.
-            printf("\n### Variable fixing su OMIP - Tentativo %d ###\n", i);
+            printf("\n### Variable fixing su OMIP - Tentativo %d - Run %d ###\n", i, cnt);
             bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a zero.
             status = variable_fixing(env, omip, int_indices, fixed_indices, num_int_vars, x_fmip);
             if (status) {
@@ -940,7 +951,7 @@ int main(int argc, char* argv[]) {
 
             // Se ho trovato una soluzione ottima.
             slack_sum = sum(x_omip, numcols_mip, numcols_submip - 1);
-            if (solstat_omip == CPXMIP_OPTIMAL || solstat_omip == CPXMIP_OPTIMAL_TOL) {
+            if (solstat_omip == CPXMIP_OPTIMAL || solstat_omip == CPXMIP_OPTIMAL_TOL || solstat_omip == CPXMIP_NODE_LIM_FEAS) {
                 printf("Trovata soluzione ottima di OMIP.\n");
                 if (slack_sum == 0) {
                     printf("Trovata soluzione ammissibile per MIP.\n");
