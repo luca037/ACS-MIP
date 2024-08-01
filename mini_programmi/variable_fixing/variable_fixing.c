@@ -139,34 +139,31 @@ int restore_bounds(CPXENVptr env, CPXLPptr lp, double *lb, double *ub, int numco
 
 
 // Fissa alcune delle variabili del problema al loro upperbound.
-// 'index' contiene gli indici delle variaibli che possono essere fissate.
+// 'index' contiene gli indici delle variaibli intere.
 // 'fixed' indica se l'indice è stato fissato o meno: se fixed[i] == 1, allora
 // index[i] è stata fissata, altrimenti no.
-// 'size' è la dimensione di 'index' e 'fixed'
-int variable_fixing(CPXENVptr env, CPXLPptr lp, int *index, int *fixed, int size) {
+// 'num_int_vars' è la dimensione di 'index' e 'fixed'
+// 'x' è un array di valori: la variabile scelta viene fissata al valore specificato
+// da tale arrray.
+int variable_fixing(CPXENVptr env, CPXLPptr lp, int *index, int *fixed, int num_int_vars, double *x) {
     int i, cnt, rnd, status;
-    double ub;
+    double val; // Valore a cui fisso la var scelta.
     char lu = 'B';
 
-    cnt = size / 10; // Numero di variabili da fissare.
+    cnt = num_int_vars / 2; // Numero di variabili da fissare.
     printf("Variables to fix: %d\n", cnt);
     for (i = 0; i < cnt; ) {
         // Genero una posizione random di 'index'.
-        rnd = rand() % size;
+        rnd = rand() % num_int_vars;
         // Se è già stata fissata la variabile genero un altro valore.
         if (fixed[rnd] == 1) {
             continue;
         }
 
-        // Prelevo l'upper bound della variabile scelta.
-        status = CPXgetub(env, lp, &ub, index[rnd], index[rnd]);
-        if (status) {
-            fprintf(stderr, "Failed to get ub of variabile with index %d.\n", index[rnd]);
-            return status;
-        }
+        val = x[index[rnd]];
 
         // Fisso il valore della variabile.
-        status = CPXchgbds(env, lp, 1, &index[rnd], &lu, &ub);
+        status = CPXchgbds(env, lp, 1, &index[rnd], &lu, &val);
         if (status) {
             fprintf(stderr, "Failed to fix variable with index %d.\n", index[rnd]);
             return status;
@@ -527,7 +524,7 @@ TERMINATE:
 // Permette di creare il problema FMIP partendo dal problema MIP fornito.
 // Non effettua il variable fixing.
 int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
-    int i, cnt, status = 0;
+    int i, cnt, status;
     double tmp;
     
     int numcols = CPXgetnumcols(env, mip);
@@ -845,14 +842,18 @@ int main(int argc, char* argv[]) {
 
 // ### Inizio ciclo di risoluzione ###
     printf("\nInizio ciclo risolutivo.\n");
-    for (cnt = 0; ; cnt++) {
+    for (cnt = 0; cnt < 5; cnt++) {
         printf("\n### Ciclo risolutivo %d ###", cnt);
         // Risolvo l'FMIP: massimo 'MAX_ATTEMPTS' tentativi.
         for (i = 0; i < MAX_ATTEMPTS; i++) {
             // Fisso le variabili di FMIP.
             printf("\n### Variable fixing su FMIP - Tentativo %d ###\n", i);
             bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a zero.
-            status = variable_fixing(env, fmip, int_indices, fixed_indices, num_int_vars);
+            if (cnt == 0) { // Genero l'initial vector al primo ciclo.
+                status = variable_fixing(env, fmip, int_indices, fixed_indices, num_int_vars, ub_mip);
+            } else { // Altrimenti uso i valori di OMIP.
+                status = variable_fixing(env, fmip, int_indices, fixed_indices, num_int_vars, x_omip);
+            }
             if (status) {
                 fprintf(stderr, "Failed to fix variables of FMIP.\n");
                 goto TERMINATE;
@@ -887,7 +888,7 @@ int main(int argc, char* argv[]) {
 
             // Se ho trovato una soluzione ottima.
             if (solstat_fmip == CPXMIP_OPTIMAL || solstat_fmip == CPXMIP_OPTIMAL_TOL) {
-                printf("Trovata soluzione ottima.\n");
+                printf("Trovata soluzione ottima di FMIP.\n");
                 break;
             } 
         }
@@ -912,7 +913,7 @@ int main(int argc, char* argv[]) {
             // Fisso le variabili di OMIP.
             printf("\n### Variable fixing su OMIP - Tentativo %d ###\n", i);
             bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a zero.
-            status = variable_fixing(env, omip, int_indices, fixed_indices, num_int_vars);
+            status = variable_fixing(env, omip, int_indices, fixed_indices, num_int_vars, x_fmip);
             if (status) {
                 fprintf(stderr, "Failed to fix variables of FMIP.\n");
                 goto TERMINATE;
@@ -938,9 +939,15 @@ int main(int argc, char* argv[]) {
             }
 
             // Se ho trovato una soluzione ottima.
+            slack_sum = sum(x_omip, numcols_mip, numcols_submip - 1);
             if (solstat_omip == CPXMIP_OPTIMAL || solstat_omip == CPXMIP_OPTIMAL_TOL) {
-                printf("Trovata soluzione ottima.\n");
-                goto TERMINATE;
+                printf("Trovata soluzione ottima di OMIP.\n");
+                if (slack_sum == 0) {
+                    printf("Trovata soluzione ammissibile per MIP.\n");
+                    goto TERMINATE;
+                } else {
+                    break;
+                }
             }
             // TODO: devono essere gestiti anche gli altri status che forniscono
             //       una soluzione ottima.
