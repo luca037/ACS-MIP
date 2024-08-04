@@ -1,8 +1,3 @@
-/*
- * Prima implementazione della funzione che fissa il valore delle variabili
- * di un problema.
- */
-
 #include <ilcplex/cplex.h>
 #include <ctype.h>
 #include <stdio.h>
@@ -63,7 +58,15 @@ int get_colname(CPXENVptr env, CPXLPptr lp, int index, char *colname) {
     char namestore[MAX_COLNAME_LEN];
 
     // Ricavo il nome della colonna.
-    status = CPXgetcolname(env, lp, (char**) &namestore, namestore, MAX_COLNAME_LEN, &surplus, index, index);
+    status = CPXgetcolname(
+        env,
+        lp,
+        (char**) &namestore,
+        namestore,MAX_COLNAME_LEN,
+        &surplus,
+        index,
+        index
+    );
     if (status) {
         fprintf(stderr, "Failed get column name.\n");
         return status;
@@ -78,7 +81,15 @@ int get_colname(CPXENVptr env, CPXLPptr lp, int index, char *colname) {
 // del problema mip passato.
 // 'lb' e 'ub' devono avere dimensione 'numcols'.
 // 'int_indices' deve avere dimensione 'num_int_vars'.
-int init_mip_bds_and_indices(CPXENVptr env, CPXLPptr mip, double *lb, double *ub, int numcols, int *int_indices, int num_int_vars) {
+int init_mip_bds_and_indices(
+    CPXENVptr env,
+    CPXLPptr mip,
+    double *lb,
+    double *ub,
+    int numcols,
+    int *int_indices,
+    int num_int_vars
+) {
     int i, j, status;
 
     // Salvo gli indici delle variabili intere di MIP.
@@ -119,22 +130,47 @@ int init_mip_bds_and_indices(CPXENVptr env, CPXLPptr mip, double *lb, double *ub
 // 'fixed' indica se l'indice è stato fissato o meno: se fixed[i] == 1, allora
 // index[i] è stata fissata, altrimenti no.
 // 'num_int_vars' è la dimensione di 'int_indices' e 'fixed_indices'.
-int restore_bounds(CPXENVptr env, CPXLPptr lp, double *lb, double *ub, int numcols, int *int_indices, int *fixed_indices, int num_int_vars) {
+int restore_bounds(
+    CPXENVptr env,
+    CPXLPptr lp,
+    double *lb,
+    double *ub,
+    int numcols,
+    int *int_indices,
+    int *fixed_indices,
+    int num_int_vars
+) {
     int i, status;
     char lower = 'L', upper = 'U';
 
     for (i = 0; i < num_int_vars; i++) {
         if (fixed_indices[i]) { // Se è stata fissata.
             // Reset lower bound.
-            status = CPXchgbds(env, lp, 1, &int_indices[i], &lower, &lb[int_indices[i]]);
+            status = CPXchgbds(
+                env,
+                lp,
+                1,
+                &int_indices[i],
+                &lower,
+                &lb[int_indices[i]]
+            );
             if (status) {
-                fprintf(stderr, "Failed to reset lower bound of variable %d.\n", int_indices[i]);
+                fprintf(stderr, "Failed to reset lower bound "
+                                "of variable %d.\n", int_indices[i]);
                 return status;
             }
             // Reset upper bound.
-            status = CPXchgbds(env, lp, 1, &int_indices[i], &upper, &ub[int_indices[i]]);
+            status = CPXchgbds(
+                env,
+                lp,
+                1,
+                &int_indices[i],
+                &upper,
+                &ub[int_indices[i]]
+            );
             if (status) {
-                fprintf(stderr, "Failed to reset upper bound of variable %d.\n", int_indices[i]);
+                fprintf(stderr, "Failed to reset upper bound "
+                                "of variable %d.\n", int_indices[i]);
                 return status;
             }
         }
@@ -151,7 +187,14 @@ int restore_bounds(CPXENVptr env, CPXLPptr lp, double *lb, double *ub, int numco
 // 'num_int_vars' è la dimensione di 'index' e 'fixed'
 // 'x' è un array di valori: la variabile scelta viene fissata al valore specificato
 // da tale arrray.
-int variable_fixing(CPXENVptr env, CPXLPptr lp, int *index, int *fixed, int num_int_vars, double *x) {
+int variable_fixing(
+    CPXENVptr env,
+    CPXLPptr lp,
+    int *index,
+    int *fixed,
+    int num_int_vars,
+    double *x
+) {
     int i, cnt, rnd, status;
     double val; // Valore a cui fisso la var scelta.
     char lu = 'B';
@@ -171,7 +214,8 @@ int variable_fixing(CPXENVptr env, CPXLPptr lp, int *index, int *fixed, int num_
         // Fisso il valore della variabile.
         status = CPXchgbds(env, lp, 1, &index[rnd], &lu, &val);
         if (status) {
-            fprintf(stderr, "Failed to fix variable with index %d.\n", index[rnd]);
+            fprintf(stderr, 
+                    "Failed to fix variable with index %d.\n", index[rnd]);
             return status;
         }
         fixed[rnd] = 1;
@@ -184,7 +228,16 @@ int variable_fixing(CPXENVptr env, CPXLPptr lp, int *index, int *fixed, int num_
 
 
 // Ottimizza il problema passato e scrive i risulati nelle variabili passate.
-int optimize_prob(CPXENVptr env, CPXLPptr lp, double *objval, int *solstat, double *x, int begin, int end, int verbose) {
+int optimize_prob(
+    CPXENVptr env,
+    CPXLPptr lp,
+    double *objval,
+    int *solstat,
+    double *x,
+    int begin,
+    int end,
+    int verbose
+) {
     int status;
     int numcols = CPXgetnumcols(env, lp);
 
@@ -213,7 +266,8 @@ int optimize_prob(CPXENVptr env, CPXLPptr lp, double *objval, int *solstat, doub
     }
 
     if (verbose) {
-        printf("Solution status: %d\nObjective value: %.2f\n", *solstat, *objval);
+        printf("Solution status: %d\n", *solstat);
+        printf("Objective value: %.2f\n", *objval);
         //printf("Variables values:\n");
         //char colname[MAX_COLNAME_LEN];
         //for (int i = 0; i < numcols; i++) { 
@@ -256,7 +310,10 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
 
     colnames = (char**) malloc(ccnt * sizeof(char*));
 
-    if (matbeg == NULL || matind == NULL || matval == NULL || colnames == NULL) {
+    if (matbeg == NULL ||
+        matind == NULL ||
+        matval == NULL || 
+        colnames == NULL) {
         fprintf(stderr, "No memory for adding slack variabiles.\n");
         status = 1;
         goto TERMINATE;
@@ -292,7 +349,19 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
     }
 
     // Ora posso aggiungere le colonne di slack.
-    status = CPXaddcols(env, lp, ccnt, nzcnt, NULL, matbeg, matind, matval, NULL, NULL, colnames);
+    status = CPXaddcols(
+        env,
+        lp,
+        ccnt,
+        nzcnt,
+        NULL,
+        matbeg,
+        matind,
+        matval,
+        NULL,
+        NULL,
+        colnames
+    );
     if (status) {
         fprintf(stderr, "Failed to add new columns to the problem.\n");
         goto TERMINATE;
@@ -359,7 +428,16 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         goto TERMINATE;
     }
 
-    status = CPXgetcolname(env, src, colnames, colnamestore, -surplus, &surplus, 0, numcols - 1);
+    status = CPXgetcolname(
+        env,
+        src,
+        colnames,
+        colnamestore,
+        -surplus,
+        &surplus,
+        0,
+        numcols - 1
+    );
     if (status) {
         fprintf(stderr, "Failed to get variables names of SRC.\n");
         goto TERMINATE;
@@ -380,7 +458,16 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         goto TERMINATE;
     }
 
-    status = CPXgetrowname(env, src, rownames, rownamestore, -surplus, &surplus, 0, numrows - 1);
+    status = CPXgetrowname(
+        env,
+        src,
+        rownames,
+        rownamestore,
+        -surplus,
+        &surplus,
+        0,
+        numrows - 1
+    );
     if (status) {
         fprintf(stderr, "Failed to get constraints names of SRC.\n");
         goto TERMINATE;
@@ -435,14 +522,16 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
     matval = (double*) malloc(numnz * sizeof(double));
 
     if (matbeg == NULL || matind == NULL || matval == NULL || matcnt == NULL) {
-        fprintf(stderr, "No memory for saving matbeg or matind or matval or matcnt of SRC.\n");
+        fprintf(stderr, "No memory for saving matbeg "
+                        "or matind or matval or matcnt of SRC.\n");
         status = 1;
         goto TERMINATE;
     }
 
     status = CPXgetcols(env, src, &nzcnt, matbeg, matind, matval, numnz, &surplus, 0, numcols - 1);
     if (status) {
-        fprintf(stderr, "Failed to copy matbeg or matind or matval coefficients of SRC.\n");
+        fprintf(stderr, "Failed to copy matbeg""or matind "
+                        "or matval coefficients of SRC.\n");
         goto TERMINATE;
     }
 
@@ -456,7 +545,8 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
     ub = (double*) malloc(numcols * sizeof(double));
     lb = (double*) malloc(numcols * sizeof(double));
     if (ub == NULL || lb == NULL) {
-        fprintf(stderr, "No memory for saving lower bounds or upper bounds of SRC.\n");
+        fprintf(stderr, "No memory for saving lower bounds "
+                        "or upper bounds of SRC.\n");
         status = 1;
         goto TERMINATE;
     }
@@ -490,9 +580,23 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
     // Ora posso crere la copia del problema SRC in DST.
     // TODO: non gestisco rngval (settato a NULL).
     status = CPXcopylpwnames(
-            env, dst, numcols, numrows, CPXgetobjsen(env, src), 
-            obj, rhs, sense, matbeg, matcnt, matind, matval, lb, ub, NULL,
-            colnames, rownames
+        env,
+        dst,
+        numcols,
+        numrows,
+        CPXgetobjsen(env, src),
+        obj,
+        rhs,
+        sense,
+        matbeg,
+        matcnt,
+        matind,
+        matval,
+        lb,
+        ub,
+        NULL,
+        colnames,
+        rownames
     );
     if (status) {
         fprintf(stderr, "Failed to populate DST from SRC.\n");
@@ -533,7 +637,6 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
     double tmp;
     
     int numcols = CPXgetnumcols(env, mip);
-    int numrows = CPXgetnumrows(env, mip);
 
     *fmip = CPXcreateprob(env, &status, "FMIP");
     if (*fmip == NULL) {
@@ -562,7 +665,8 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
     for (i = 0, tmp = 0; i < numcols; i++) {
         status = CPXchgobj(env, *fmip, 1, &i, &tmp);
         if (status) {
-            fprintf(stderr, "Failed change variable index %d coefficient in obj.\n", i);
+            fprintf(stderr, "Failed change variable index %d "
+                            "coefficient in obj.\n", i);
             return status;
         }
     }
@@ -573,7 +677,8 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
     for (i = numcols, tmp = 1; i < cnt; i++) {
         status = CPXchgobj(env, *fmip, 1, &i, &tmp);
         if (status) {
-            fprintf(stderr, "Failed change variable index %d (slack) coefficient in obj.\n", i);
+            fprintf(stderr, "Failed change variable index %d (slack) "
+                            "coefficient in obj.\n", i);
             return status;
         }
     }
@@ -597,7 +702,6 @@ int create_omip(CPXENVptr env, CPXLPptr mip, CPXLPptr *omip, double rhs_slack) {
     double tmp;
     
     int numcols = CPXgetnumcols(env, mip);
-    int numrows = CPXgetnumrows(env, mip);
 
     char sense;
     char *rowname = "AD";
@@ -631,7 +735,7 @@ int create_omip(CPXENVptr env, CPXLPptr mip, CPXLPptr *omip, double rhs_slack) {
 
     // Aggiungo il vincolo che limita il grado della non ammissibilità.
     sense = 'L';
-    slack_cnt = CPXgetnumcols(env, *omip) - numcols; // Numero di variabili slack aggiunte.
+    slack_cnt = CPXgetnumcols(env, *omip) - numcols; // Slack da aggiungere.
 
     rmatbeg = 0;
     rmatind = (int*) malloc(slack_cnt * sizeof(int));
@@ -651,7 +755,20 @@ int create_omip(CPXENVptr env, CPXLPptr mip, CPXLPptr *omip, double rhs_slack) {
     }
 
     // Ora posso aggiungere la nuova riga della matrice dei vincoli.
-    status = CPXaddrows(env, *omip, 0, 1, slack_cnt, &rhs_slack, &sense, &rmatbeg, rmatind, rmatval, NULL, &rowname);
+    status = CPXaddrows(
+        env,
+        *omip,
+        0,
+        1,
+        slack_cnt,
+        &rhs_slack,
+        &sense,
+        &rmatbeg,
+        rmatind,
+        rmatval,
+        NULL,
+        &rowname
+    );
     if (status) {
         fprintf(stderr, "Failed to add row to OMIP.\n");
         goto TERMINATE;
@@ -783,12 +900,24 @@ int main(int argc, char* argv[]) {
     lb_mip = (double*) malloc(numcols_mip * sizeof(double));
     ub_mip = (double*) malloc(numcols_mip * sizeof(double));
 
-    if (int_indices == NULL || fixed_indices == NULL || lb_mip == NULL || ub_mip == NULL) {
-        fprintf(stderr, "No memory for int_indices, fixed_indices, lb_mip and ub_mip.\n");
+    if (int_indices == NULL ||
+        fixed_indices == NULL ||
+        lb_mip == NULL ||
+        ub_mip == NULL) {
+        fprintf(stderr, "No memory for int_indices, fixed_indices,"
+                        "lb_mip and ub_mip.\n");
         goto TERMINATE;
     }
 
-    status = init_mip_bds_and_indices(env, mip, lb_mip, ub_mip, numcols_mip, int_indices, num_int_vars);
+    status = init_mip_bds_and_indices(
+        env,
+        mip,
+        lb_mip,
+        ub_mip,
+        numcols_mip,
+        int_indices,
+        num_int_vars
+    );
     if (status) {
         fprintf(stderr, "Failed to initialize arrays with MIP information.\n");
         goto TERMINATE;
@@ -814,12 +943,28 @@ int main(int argc, char* argv[]) {
         // Risolvo l'FMIP: massimo 'MAX_ATTEMPTS' tentativi.
         for (i = 0; i < MAX_ATTEMPTS; i++) {
             // Fisso le variabili di FMIP.
-            printf("\n### Variable fixing on FMIP - Attempt %d - Run %d ###\n", i, cnt);
-            bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a zero.
+            printf("\n### Variable fixing on FMIP "
+                   "- Attempt %d - Run %d ###\n", i, cnt);
+            bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a
+                                                              // zero.
             if (cnt == 0) { // Genero l'initial vector al primo ciclo.
-                status = variable_fixing(env, fmip, int_indices, fixed_indices, num_int_vars, ub_mip);
+                status = variable_fixing(
+                    env,
+                    fmip,
+                    int_indices,
+                    fixed_indices,
+                    num_int_vars, 
+                    ub_mip
+                );
             } else { // Altrimenti uso i valori di OMIP.
-                status = variable_fixing(env, fmip, int_indices, fixed_indices, num_int_vars, x_omip);
+                status = variable_fixing(
+                    env,
+                    fmip,
+                    int_indices,
+                    fixed_indices,
+                    num_int_vars,
+                    x_omip
+                );
             }
             if (status) {
                 fprintf(stderr, "Failed to fix variables of FMIP.\n");
@@ -838,25 +983,46 @@ int main(int argc, char* argv[]) {
             //printf("\n");
 
             // Ottimizzo FMIP.
-            status = optimize_prob(env, fmip, &objval_fmip, &solstat_fmip, x_fmip, 0, numcols_submip - 1, 1);
+            status = optimize_prob(
+                env,
+                fmip,
+                &objval_fmip,
+                &solstat_fmip,
+                x_fmip,
+                0,
+                numcols_submip - 1,
+                1
+            );
             if (status) {
                 if (solstat_fmip == CPXMIP_INFEASIBLE) {
                     printf("FMIP is infeasible.\n");
                     // Restore dei bounds di FMIP.
-                    status = restore_bounds(env, fmip, lb_mip, ub_mip, numcols_mip, int_indices, fixed_indices, num_int_vars);
+                    status = restore_bounds(
+                        env,
+                        fmip,
+                        lb_mip,
+                        ub_mip,
+                        numcols_mip,
+                        int_indices,
+                        fixed_indices,
+                        num_int_vars
+                    );
                     if (status) {
                         fprintf (stderr, "Failed to restore FMIP bounds.\n");
                         goto TERMINATE;
                     }
                     continue;
                 } else {
-                    fprintf(stderr, "Failed to optimize FMIP.\nSolution status: %d", solstat_fmip);
+                    fprintf(stderr, "Failed to optimize FMIP.\n"
+                                    "Solution status: %d", solstat_fmip);
                     goto TERMINATE;
                 }
             }
 
             // Se ho trovato una soluzione ottima.
-            if (solstat_fmip == CPXMIP_OPTIMAL || solstat_fmip == CPXMIP_OPTIMAL_TOL || solstat_fmip == CPXMIP_NODE_LIM_FEAS) {
+            if (solstat_fmip == CPXMIP_OPTIMAL ||
+                solstat_fmip == CPXMIP_OPTIMAL_TOL ||
+                solstat_fmip == CPXMIP_NODE_LIM_FEAS) {
                 printf("Found an optimal solution for FMIP.\n");
                 break;
             } 
@@ -880,28 +1046,56 @@ int main(int argc, char* argv[]) {
         // Risolvo l'OMIP: massimo 'MAX_ATTEMPTS' tentativi.
         for (i = 0; i < MAX_ATTEMPTS; i++) {
             // Fisso le variabili di OMIP.
-            printf("\n### Variable fixing on OMIP - Attempt %d - Run %d ###\n", i, cnt);
-            bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a zero.
-            status = variable_fixing(env, omip, int_indices, fixed_indices, num_int_vars, x_fmip);
+            printf("\n### Variable fixing on OMIP "
+                   "- Attempt %d - Run %d ###\n", i, cnt);
+            bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a 
+                                                              // zero.
+            status = variable_fixing(
+                env,
+                omip,
+                int_indices,
+                fixed_indices,
+                num_int_vars,
+                x_fmip
+            );
             if (status) {
                 fprintf(stderr, "Failed to fix variables of FMIP.\n");
                 goto TERMINATE;
             }
 
             // Ottimizzo OMIP.
-            status = optimize_prob(env, omip, &objval_omip, &solstat_omip, x_omip, 0, numcols_submip - 1, 1);
+            status = optimize_prob(
+                env,
+                omip,
+                &objval_omip,
+                &solstat_omip,
+                x_omip,
+                0,
+                numcols_submip - 1,
+                1
+            );
             if (status) {
                 if (solstat_omip == CPXMIP_INFEASIBLE) {
                     printf("OMIP is infeasible.\n");
                     // Restore dei bounds di OMIP.
-                    status = restore_bounds(env, omip, lb_mip, ub_mip, numcols_mip, int_indices, fixed_indices, num_int_vars);
+                    status = restore_bounds(
+                        env,
+                        omip,
+                        lb_mip,
+                        ub_mip,
+                        numcols_mip,
+                        int_indices,
+                        fixed_indices,
+                        num_int_vars
+                    );
                     if (status) {
                         fprintf (stderr, "Failed to restore OMIP bounds.\n");
                         goto TERMINATE;
                     }
                     continue;
                 } else {
-                    fprintf(stderr, "Failed to optimize OMIP.\n Solution status: %d", solstat_omip);
+                    fprintf(stderr, "Failed to optimize OMIP."
+                                    "\n Solution status: %d", solstat_omip);
                     goto TERMINATE;
                 }
             }
@@ -909,7 +1103,9 @@ int main(int argc, char* argv[]) {
             // Se ho trovato una soluzione ottima.
             slack_sum = sum(x_omip, numcols_mip, numcols_submip - 1);
             printf("Slack sum: %.2f\n", slack_sum);
-            if (solstat_omip == CPXMIP_OPTIMAL || solstat_omip == CPXMIP_OPTIMAL_TOL || solstat_omip == CPXMIP_NODE_LIM_FEAS) {
+            if (solstat_omip == CPXMIP_OPTIMAL ||
+                solstat_omip == CPXMIP_OPTIMAL_TOL ||
+                solstat_omip == CPXMIP_NODE_LIM_FEAS) {
                 printf("Found an optimal solution for OMIP.\n");
                 if (slack_sum == 0) {
                     printf("Found a feasibile solution for MIP.\n");
