@@ -178,6 +178,7 @@ int init_mip_bds_and_indices(
     return 0;
 }
 
+
 /**
  * Restores upper and lower bounds of lp with the specified values only for the
  * variables that was fixed by variable_fixing.
@@ -262,14 +263,13 @@ int restore_bounds(
  *      with index int_indices[2] is fixed to the value x[int_indices[2]].
  *      Then in fixed_indices[2] will be stored 1.
  *
- *      In this our example the variable with index 20 will be fixed to 66
- *      and fixed_indices = {0, 0, 1}.
+ *      In other words variable with index 20 will be fixed to 66 and 
+ *      fixed_indices = {0, 0, 1}.
  *
  * env: A pointer to the CPLEX environment.
  * lp: A pointer to a CPLEX problem object.
  * int_indices: An array where are stored the indices of the integer variables
- *              of lp.
- *              This array must be of length at least num_int_vars.
+ *              of lp. This array must be of length at least num_int_vars.
  * fixed_indices: An array that tells if a variable was fixed.
  *                A variable with index int_indices[i] was fixed if and only if 
  *                fixed_indices[i] is a nonzero value.
@@ -320,14 +320,30 @@ int variable_fixing(
 }
 
 
-// Ottimizza il problema passato e scrive i risulati nelle variabili passate.
+/**
+ * Optimizes the problem pointed by lp.
+ *
+ * env: A pointer to the CPLEX environment.
+ * lp: A pointer to a CPLEX problem object.
+ * objval: A pointer where objective optimal value is to be returned.
+ * solstat: A pointer where the status code is to be returned. 
+ * x: An array where the values of the variables are to be returned. 
+ *    This array must be of length at least (end - beg + 1).
+ * beg: Specifies the beginning of the range of the variables values to be
+ *      returned.
+ * end: Specifies the end of the range of the variables values to be returned.
+ * verbose: Manage output verbosity. If it's set to a nonzero value then
+ *          objval and solstat are printed to standard output.
+ *
+ * return: Returns 0 if successful and nonzero if an error occurs.
+ */
 int optimize_prob(
     CPXENVptr env,
     CPXLPptr lp,
     double *objval,
     int *solstat,
     double *x,
-    int begin,
+    int beg,
     int end,
     int verbose
 ) {
@@ -352,7 +368,7 @@ int optimize_prob(
     }
 
     // Get variables values.
-    status = CPXgetx(env, lp, x, begin, end);
+    status = CPXgetx(env, lp, x, beg, end);
     if (status) {
         fprintf(stderr, "Failed to obtain solution.\n");
         return status;
@@ -376,7 +392,15 @@ int optimize_prob(
 }
 
 
-// Aggiunge le variabili slack alla matrice dei vincoli di lp.
+/**
+ * Adds slack variables to the problem pointed by lp. The total number
+ * of variables added is given by the 2 * number of columns of the problem.
+ *
+ * env: A pointer to the CPLEX environment.
+ * lp: A pointer to a CPLEX problem object.
+ *
+ * return: Returns 0 if successful and nonzero if an error occurs.
+ */
 int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
     int i, tmp, status;
     char ctype;
@@ -489,7 +513,15 @@ TERMINATE:
 }
 
 
-// Copia i dati del problema src nel problema dst.
+/**
+ * Copies the problem pointed by src to the problem pointed by dst.
+ *
+ * env: A pointer to the CPLEX environment.
+ * src: A pointer to a CPLEX problem object. This is the source problem.
+ * dst: A pointer to a CPLEX problem object. The copy of src.
+ *
+ * return: Returns 0 if successful and nonzero if an error occurs.
+ */
 int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
     int i, status;
 
@@ -723,8 +755,16 @@ TERMINATE:
 }
 
 
-// Permette di creare il problema FMIP partendo dal problema MIP fornito.
-// Non effettua il variable fixing.
+/**
+ * Creates FMIP starting from MIP. Note that this function doesn't call
+ * variable_fixing.
+ *
+ * env: A pointer to the CPLEX environment.
+ * mip: A pointer to a CPLEX problem object.
+ * fmip: A pointer to a CPXLPptr that points to a CPLEX problem. 
+ *
+ * return: Returns 0 if successful and nonzero if an error occurs.
+ */
 int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
     int i, cnt, status;
     double tmp;
@@ -789,7 +829,16 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
 }
 
 
-// Permette di creare l'OMIP partendo dal problema MIP fornito.
+/**
+ * Creates OMIP starting from MIP. Note that this function doesn't call
+ * variable_fixing.
+ *
+ * env: A pointer to the CPLEX environment.
+ * mip: A pointer to a CPLEX problem object.
+ * omip: A pointer to a CPXLPptr that points to a CPLEX problem. 
+ *
+ * return: Returns 0 if successful and nonzero if an error occurs.
+ */
 int create_omip(CPXENVptr env, CPXLPptr mip, CPXLPptr *omip, double rhs_slack) {
     int i, cnt, status;
     double tmp;
