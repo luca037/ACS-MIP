@@ -30,7 +30,27 @@
 // Massimo numero di run.
 #define MAX_RUN 50
 
-// Frees up pointer *ptr and sets it to NULL.
+
+/**
+ * Print help message.
+ *
+ * progname: The executable's name.
+ */
+void print_usage(char *progname) {
+   fprintf (stderr, "Usage: %s <filename>\n"
+                    "   where filename is a file with extension \n"
+                    "      MPS, SAV, or LP (lower case is allowed)\n"
+                    "  This program uses the CPLEX MIP optimizer.\n"
+                    " Exiting...\n", progname
+   );
+}
+
+
+/**
+ * Frees up pointer and set it to NULL.
+ *
+ * ptr: The pointer to free up.
+ */
 void free_and_null(char** ptr) {
     if (*ptr != NULL) {
         free(*ptr);
@@ -38,8 +58,18 @@ void free_and_null(char** ptr) {
     }
 }
 
+
 // Ritorna la somma degli elementi dell'array passato.
 // La lunghezza di 'x' deve essere almeno 'end' - 'beg' + 1.
+/**
+ * Sums elements from beg to end.
+ *
+ * x: array with at least (end - beg + 1) elements.
+ * beg: Position where the sum begins.
+ * end: Position where the sum ends.
+ *
+ * return: The sum of the elements.
+ */
 double sum(double *x, int beg, int end) {
     if (beg > end) {
         return 0;
@@ -51,8 +81,17 @@ double sum(double *x, int beg, int end) {
     return s;
 }
 
-// Permette di ottenere il nome di una variabile, dato il suo indice.
-// Salva il nome della variabile in colname.
+
+/**
+ * Accesses column's name.
+ *
+ * env: A pointer to the CPLEX environment.
+ * lp: A pointer to a CPLEX problem object.
+ * index: Index of the column.
+ * colname: An array where the specified column names are to be returned.
+ *
+ * return: Returns 0 if successful and nonzero if an error occurs.
+ */
 int get_colname(CPXENVptr env, CPXLPptr lp, int index, char *colname) {
     int surplus, status;
     char namestore[MAX_COLNAME_LEN];
@@ -78,10 +117,25 @@ int get_colname(CPXENVptr env, CPXLPptr lp, int index, char *colname) {
     return 0;
 }
 
-// Inizializza i vettori di lb, ub e il vettore contenente le variabili intere
-// del problema mip passato.
-// 'lb' e 'ub' devono avere dimensione 'numcols'.
-// 'int_indices' deve avere dimensione 'num_int_vars'.
+
+/**
+ * Inizializes lower bounds, upper bounds and the array with indices of the
+ * integer variables.
+ *
+ * env: A pointer to the CPLEX environment.
+ * mip: A pointer to a CPLEX problem object.
+ * lp: An array where the lower bounds of mip are to be returned.
+ *     This array must be of length at least numcols.
+ * up: An array where the upper bounds of mip are to be returned.
+ *     This array must be of length at least numcols.
+ * numcols: The length of the arrays lp and up.
+ * int_indices: An array where the indices of integer variables are to be
+ *              returned.
+ *              This array must be of length at least num_int_vars.
+ * num_int_vars: The length of the array int_indices.
+ *
+ * return: Returns 0 if successful and nonzero if an error occurs.
+ */
 int init_mip_bds_and_indices(
     CPXENVptr env,
     CPXLPptr mip,
@@ -124,13 +178,28 @@ int init_mip_bds_and_indices(
     return 0;
 }
 
-// Permette di resettare i bounds del problema.
-// Vengono resettati solamente i bounds delle variabili che sono state fissate.
-// 'lb' e 'ub' hanno dimensione 'numcols'.
-// 'int_indices' contiene gli indici delle variabili intere.
-// 'fixed' indica se l'indice è stato fissato o meno: se fixed[i] == 1, allora
-// index[i] è stata fissata, altrimenti no.
-// 'num_int_vars' è la dimensione di 'int_indices' e 'fixed_indices'.
+/**
+ * Restores upper and lower bounds of lp with the specified values only for the
+ * variables that was fixed by variable_fixing.
+ *
+ * env: A pointer to the CPLEX environment.
+ * lp: A pointer to a CPLEX problem object.
+ * lb: An array where are stored all the lower bounds of lp.
+ *     This array must be of length at least numcols.
+ * ub: An array where are stored all the upper bounds of lp.
+ *     This array must be of length at least numcols.
+ * numcols: The length of the arrays lb and up.
+ * int_indices: An array where are stored the indices of the integer variables
+ *              of lp.
+ *              This array must be of length at least num_int_vars.
+ * fixed_indices: An array that tells if a variable was fixed.
+ *                A variable with index int_indices[i] was fixed if and only if 
+ *                fixed_indices[i] is a nonzero value.
+ *                This array must be of length at least num_int_vars.
+ * num_int_vars: The length of the arrays int_indices and fixed_indices.
+ *
+ * return: Returns 0 if successful and nonzero if an error occurs.
+ */
 int restore_bounds(
     CPXENVptr env,
     CPXLPptr lp,
@@ -181,18 +250,41 @@ int restore_bounds(
 }
 
 
-// Fissa alcune delle variabili del problema al loro upperbound.
-// 'index' contiene gli indici delle variaibli intere.
-// 'fixed' indica se l'indice è stato fissato o meno: se fixed[i] == 1, allora
-// index[i] è stata fissata, altrimenti no.
-// 'num_int_vars' è la dimensione di 'index' e 'fixed'
-// 'x' è un array di valori: la variabile scelta viene fissata al valore specificato
-// da tale arrray.
+/**
+ * Fixes some of the problem's variables to a value specified by the array
+ * named x. The index of the variable that will be fixed is randomly choose
+ * from the indices specifed in the array named int_indices.
+ *
+ * For example:
+ *      int_indices = {1, 4, 20}, x = {100, 49, 66}, fixed_indices = {0, 0, 0}
+ *      
+ *      If the random generetor generates the value 2 then the variable
+ *      with index int_indices[2] is fixed to the value x[int_indices[2]].
+ *      Then in fixed_indices[2] will be stored 1.
+ *
+ *      In this our example the variable with index 20 will be fixed to 66
+ *      and fixed_indices = {0, 0, 1}.
+ *
+ * env: A pointer to the CPLEX environment.
+ * lp: A pointer to a CPLEX problem object.
+ * int_indices: An array where are stored the indices of the integer variables
+ *              of lp.
+ *              This array must be of length at least num_int_vars.
+ * fixed_indices: An array that tells if a variable was fixed.
+ *                A variable with index int_indices[i] was fixed if and only if 
+ *                fixed_indices[i] is a nonzero value.
+ *                This array must be of length at least num_int_vars.
+ * num_int_vars: The length of the arrays int_indices and fixed_indices.
+ * x: An array where are stored the values to use for fixing the variables.
+ *    This array must be of length at least num_int_vars.
+ *
+ * return: Returns 0 if successful and nonzero if an error occurs.
+ */
 int variable_fixing(
     CPXENVptr env,
     CPXLPptr lp,
-    int *index,
-    int *fixed,
+    int *int_indices,
+    int *fixed_indices,
     int num_int_vars,
     double *x
 ) {
@@ -206,20 +298,20 @@ int variable_fixing(
         // Genero una posizione random di 'index'.
         rnd = rand() % num_int_vars;
         // Se è già stata fissata la variabile genero un altro valore.
-        if (fixed[rnd] == 1) {
+        if (fixed_indices[rnd] == 1) {
             continue;
         }
 
-        val = x[index[rnd]];
+        val = x[int_indices[rnd]];
 
         // Fisso il valore della variabile.
-        status = CPXchgbds(env, lp, 1, &index[rnd], &lu, &val);
+        status = CPXchgbds(env, lp, 1, &int_indices[rnd], &lu, &val);
         if (status) {
             fprintf(stderr, 
-                    "Failed to fix variable with index %d.\n", index[rnd]);
+                    "Failed to fix variable with index %d.\n", int_indices[rnd]);
             return status;
         }
-        fixed[rnd] = 1;
+        fixed_indices[rnd] = 1;
 
         i += 1;
     }
@@ -808,7 +900,7 @@ int main(int argc, char* argv[]) {
 
     // Check command line arguments.
     if (argc != 2) {
-        fprintf(stderr, "Missing input file.\nUsage: %s <file1>\n", argv[0]);
+        print_usage(argv[0]);
         goto TERMINATE;
     }
 
