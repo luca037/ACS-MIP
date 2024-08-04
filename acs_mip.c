@@ -5,29 +5,29 @@
 #include <string.h>
 #include <strings.h>
 
-// Lunghezza massima del nome delle variabili slack (compreso il terminatore
-// di stringa).
-// Delta+ e Delta- sono due vettori di lunghezza uguale al numero delle 
-// righe della matrice dei vincoli.
-// Le loro componenti hanno i segunti nomi:
-//      Delta+ = [dp1, dp2, dp3, ..., dpi, ...,]
-//      Delta- = [dn1, dn2, dn3, ..., dni, ...,]
-// Se 9 è la lunghezza massima allora 9-3 è il numero di cifre massime
-// che può avere il nome delle variabili (-3 per la presenza del carattere
-// 'd', del carattere 'p' e di '\0').
+/**
+ * Maximum lenght of the slack variables names (considering '\0').
+ * The slack vectors Delta+ and Delta- have the same length.
+ * The variables ara named as follow:
+ *     Delta+ = [dp1, dp2, dp3, ..., dpi, ...,]
+ *     Delta- = [dn1, dn2, dn3, ..., dni, ...,]
+ * Note that 2 characters are taken by 'd' and 'p' or 'n' and 1 character
+ * is taken by '\0'.
+ */
 #define MAX_SLACK_NAMES_LEN 9
 
-// Lunghezza massima nome variabili e vincoli.
+/* Maximum column's name length. */
 #define MAX_COLNAME_LEN 9
 
-// Numero di tentativi che vengono effettuati per risolvere un problema che
-// risolta non risolvibile.
+/* Maximum number of attempts to solve FMIP/OMIP that has no solution due to
+ * infeasability. */
 #define MAX_ATTEMPTS 2000
 
-// Massimo numero nodi esplorabili in un problema.
+/* Maximum number of nodes explored during optimization. */
 #define NODE_LIMIT 5000
 
-// Massimo numero di run.
+/* Maximum number of run. A run is complete when the solver has found an
+ * optimal solution for FMIP and then an optimal solution for OMIP. */
 #define MAX_RUN 50
 
 
