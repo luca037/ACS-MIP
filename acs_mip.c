@@ -62,7 +62,8 @@ int get_colname(CPXENVptr env, CPXLPptr lp, int index, char *colname) {
         env,
         lp,
         (char**) &namestore,
-        namestore,MAX_COLNAME_LEN,
+        namestore,
+        MAX_COLNAME_LEN,
         &surplus,
         index,
         index
