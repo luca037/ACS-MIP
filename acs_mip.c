@@ -255,6 +255,7 @@ int restore_bounds(
  * Fixes some of the problem's variables to a value specified by the array
  * named x. The index of the variable that will be fixed is randomly choose
  * from the indices specifed in the array named int_indices.
+ * The ammount of variables that is fixed is set by the percentage parameter.
  *
  * For example:
  *      int_indices = {1, 4, 20}, x = {100, 49, 66}, fixed_indices = {0, 0, 0}
@@ -274,9 +275,11 @@ int restore_bounds(
  *                A variable with index int_indices[i] was fixed if and only if 
  *                fixed_indices[i] is a nonzero value.
  *                This array must be of length at least num_int_vars.
- * num_int_vars: The length of the arrays int_indices and fixed_indices.
  * x: An array where are stored the values to use for fixing the variables.
  *    This array must be of length at least num_int_vars.
+ * num_int_vars: The length of the arrays int_indices and fixed_indices.
+ * percent: Percentage of integer variable to fix. This value must be in the
+ *          range [0, 100].
  *
  * return: Returns 0 if successful and nonzero if an error occurs.
  */
@@ -285,14 +288,15 @@ int variable_fixing(
     CPXLPptr lp,
     int *int_indices,
     int *fixed_indices,
+    double *x,
     int num_int_vars,
-    double *x
+    int percentage
 ) {
     int i, cnt, rnd, status;
     double val; // Valore a cui fisso la var scelta.
     char lu = 'B';
 
-    cnt = num_int_vars / 5; // Numero di variabili da fissare.
+    cnt = num_int_vars * percentage / 100; // Numero di variabili da fissare.
     printf("Variables to fix: %d\n", cnt);
     for (i = 0; i < cnt; ) {
         // Genero una posizione random di 'index'.
@@ -1095,8 +1099,9 @@ int main(int argc, char* argv[]) {
                     fmip,
                     int_indices,
                     fixed_indices,
+                    ub_mip,
                     num_int_vars, 
-                    ub_mip
+                    20
                 );
             } else { // Altrimenti uso i valori di OMIP.
                 status = variable_fixing(
@@ -1104,8 +1109,9 @@ int main(int argc, char* argv[]) {
                     fmip,
                     int_indices,
                     fixed_indices,
+                    x_omip,
                     num_int_vars,
-                    x_omip
+                    20
                 );
             }
             if (status) {
@@ -1197,8 +1203,9 @@ int main(int argc, char* argv[]) {
                 omip,
                 int_indices,
                 fixed_indices,
+                x_fmip,
                 num_int_vars,
-                x_fmip
+                20
             );
             if (status) {
                 fprintf(stderr, "Failed to fix variables of FMIP.\n");
