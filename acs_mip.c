@@ -987,7 +987,7 @@ int main(int argc, char* argv[]) {
     printf("\nCreating MIP.\n");
     mip = CPXcreateprob(env, &status, argv[1]);
     if (mip == NULL) {
-        fprintf(stderr, "Failedto create MIP.\n");
+        fprintf(stderr, "Failed to create MIP.\n");
         goto TERMINATE;
     }
 
@@ -1142,7 +1142,8 @@ int main(int argc, char* argv[]) {
                 1
             );
             if (status) {
-                if (solstat_fmip == CPXMIP_INFEASIBLE) {
+                if (solstat_fmip == CPXMIP_INFEASIBLE ||
+                    solstat_fmip == CPXMIP_NODE_LIM_INFEAS) {
                     printf("FMIP is infeasible.\n");
                     // Restore dei bounds di FMIP.
                     status = restore_bounds(
@@ -1162,7 +1163,7 @@ int main(int argc, char* argv[]) {
                     continue;
                 } else {
                     fprintf(stderr, "Failed to optimize FMIP.\n"
-                                    "Solution status: %d", solstat_fmip);
+                                    "Solution status: %d\n", solstat_fmip);
                     goto TERMINATE;
                 }
             }
@@ -1224,7 +1225,8 @@ int main(int argc, char* argv[]) {
                 1
             );
             if (status) {
-                if (solstat_omip == CPXMIP_INFEASIBLE) {
+                if (solstat_omip == CPXMIP_INFEASIBLE ||
+                    solstat_omip == CPXMIP_NODE_LIM_INFEAS) {
                     printf("OMIP is infeasible.\n");
                     // Restore dei bounds di OMIP.
                     status = restore_bounds(
