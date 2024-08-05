@@ -368,6 +368,9 @@ int optimize_prob(
     status = CPXgetobjval(env, lp, objval);
     if (status) {
         fprintf(stderr, "Failed to obtain objective value.\n");
+        if (verbose) {
+            printf("Solution status: %d\n", *solstat);
+        }
         return status;
     }
 
@@ -375,6 +378,9 @@ int optimize_prob(
     status = CPXgetx(env, lp, x, beg, end);
     if (status) {
         fprintf(stderr, "Failed to obtain solution.\n");
+        if (verbose) {
+            printf("Solution status: %d\n", *solstat);
+        }
         return status;
     }
 
