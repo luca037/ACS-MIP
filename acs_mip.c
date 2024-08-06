@@ -26,6 +26,9 @@
 /* Maximum number of nodes explored during optimization. */
 #define NODE_LIMIT 5000
 
+/* Optimizer time limit (seconds). */
+#define TIME_LIMIT 180.0
+
 /* Maximum number of run. A run is complete when the solver has found an
  * optimal solution for FMIP and then an optimal solution for OMIP. */
 #define MAX_RUN 50
@@ -989,6 +992,13 @@ int main(int argc, char* argv[]) {
         goto TERMINATE;
     }
 
+    // Set time limit.
+    status = CPXsetdblparam(env, CPXPARAM_TimeLimit, TIME_LIMIT);
+    if (status) {
+        fprintf(stderr, "Failure to set time limit, error %d\n", status);
+        goto TERMINATE;
+    }
+
     // ### Creazione del MIP, FMIP e OMIP ###
     printf("\nCreating MIP.\n");
     mip = CPXcreateprob(env, &status, argv[1]);
@@ -1149,7 +1159,8 @@ int main(int argc, char* argv[]) {
             );
             if (status) {
                 if (solstat_fmip == CPXMIP_INFEASIBLE ||
-                    solstat_fmip == CPXMIP_NODE_LIM_INFEAS) {
+                    solstat_fmip == CPXMIP_NODE_LIM_INFEAS ||
+                    solstat_fmip == CPXMIP_TIME_LIM_INFEAS) {
                     printf("FMIP is infeasible.\n");
                     // Restore dei bounds di FMIP.
                     status = restore_bounds(
@@ -1177,14 +1188,17 @@ int main(int argc, char* argv[]) {
             // Se ho trovato una soluzione ottima.
             if (solstat_fmip == CPXMIP_OPTIMAL ||
                 solstat_fmip == CPXMIP_OPTIMAL_TOL ||
-                solstat_fmip == CPXMIP_NODE_LIM_FEAS) {
+                solstat_fmip == CPXMIP_NODE_LIM_FEAS ||
+                solstat_fmip == CPXMIP_TIME_LIM_FEAS) {
                 printf("Found an optimal solution for FMIP.\n");
                 break;
             } 
         }
 
         // Se nessun FMIP è stato risolto esco.
-        if (solstat_fmip == CPXMIP_INFEASIBLE) {
+        if (solstat_fmip == CPXMIP_INFEASIBLE ||
+            solstat_fmip == CPXMIP_NODE_LIM_INFEAS ||
+            solstat_fmip == CPXMIP_TIME_LIM_INFEAS) {
             printf("All FMIPs generated was infeasibile.\n");
             break;
         }
@@ -1232,7 +1246,8 @@ int main(int argc, char* argv[]) {
             );
             if (status) {
                 if (solstat_omip == CPXMIP_INFEASIBLE ||
-                    solstat_omip == CPXMIP_NODE_LIM_INFEAS) {
+                    solstat_omip == CPXMIP_NODE_LIM_INFEAS ||
+                    solstat_omip == CPXMIP_TIME_LIM_INFEAS) {
                     printf("OMIP is infeasible.\n");
                     // Restore dei bounds di OMIP.
                     status = restore_bounds(
@@ -1262,7 +1277,8 @@ int main(int argc, char* argv[]) {
             printf("Slack sum: %.2f\n", slack_sum);
             if (solstat_omip == CPXMIP_OPTIMAL ||
                 solstat_omip == CPXMIP_OPTIMAL_TOL ||
-                solstat_omip == CPXMIP_NODE_LIM_FEAS) {
+                solstat_omip == CPXMIP_NODE_LIM_FEAS ||
+                solstat_omip == CPXMIP_TIME_LIM_FEAS) {
                 printf("Found an optimal solution for OMIP.\n");
                 if (slack_sum == 0) {
                     printf("Found a feasibile solution for MIP.\n");
@@ -1276,7 +1292,9 @@ int main(int argc, char* argv[]) {
         }
 
         // Se nessun OMIP è stato risolto esco.
-        if (solstat_fmip == CPXMIP_INFEASIBLE) {
+        if (solstat_omip == CPXMIP_INFEASIBLE ||
+            solstat_omip == CPXMIP_NODE_LIM_INFEAS ||
+            solstat_omip == CPXMIP_TIME_LIM_INFEAS) {
             printf("All OMIPs generated was infeasibile.\n");
             break;
         }
