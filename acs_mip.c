@@ -62,8 +62,6 @@ void free_and_null(char** ptr) {
 }
 
 
-// Ritorna la somma degli elementi dell'array passato.
-// La lunghezza di 'x' deve essere almeno 'end' - 'beg' + 1.
 /**
  * Sums elements from beg to end.
  *
