@@ -306,13 +306,14 @@ void init_initial_vector(
 
 
 /**
- * Fixes some of the problem's variables to a value specified by the array
- * named x. The index of the variable that will be fixed is randomly choose
- * from the indices specifed in the array named int_indices.
+ * Fixes some of the problem variables to a value specified by the array
+ * named x. An index is randomly choose from the indices stored in the array 
+ * named int_indices. The variables are fixed starting from the choosen index.
  * The ammount of variables that is fixed is set by the percentage parameter.
  *
  * For example:
- *      int_indices = {1, 4, 20}, x = {100, 49, 66}, fixed_indices = {0, 0, 0}
+ *      int_indices = {1, 4, 20}, x = {100, 49, 66}, fixed_indices = {0, 0, 0},
+ *      percentage = 50
  *      
  *      If the random generetor generates the value 2 then the variable
  *      with index int_indices[2] is fixed to the value x[int_indices[2]].
