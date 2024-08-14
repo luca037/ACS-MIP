@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <unistd.h>
 
 /* Maximum lenght of the slack variables names (considering '\0').
  * The slack vectors Delta+ and Delta- have the same length.
@@ -19,10 +20,10 @@
 
 /* Maximum number of attempts to solve FMIP/OMIP that has no solution due to
  * infeasability. */
-#define MAX_ATTEMPTS 2000
+#define MAX_ATTEMPTS 200
 
 /* Maximum number of nodes explored during optimization. */
-#define NODE_LIMIT 5000
+#define NODE_LIMIT 2000
 
 /* Optimizer time limit (seconds). */
 #define TIME_LIMIT 180.0
@@ -44,7 +45,7 @@
  * progname: The executable's name.
  */
 void print_usage(char *progname) {
-   fprintf (stderr, "Usage: %s <intput> <output>\n"
+   fprintf (stderr, "Usage: %s -i <intput> -o <output>\n"
                     "   input: is a file with extension \n"
                     "      MPS, SAV, or LP (lower case is allowed)\n"
                     "   output: is a file with extension csv\n"
@@ -1024,9 +1025,7 @@ TERMINATE:
 }
 
 
-int main(int argc, char* argv[]) {
-    FILE *out_csv;
-
+int main(int argc, char *argv[]) {
     CPXENVptr env = NULL;
     CPXLPptr mip = NULL, fmip = NULL, omip = NULL;
 
@@ -1044,26 +1043,44 @@ int main(int argc, char* argv[]) {
                                            // dopo un variable fixing.
     double slack_sum; // Somma variabili slack (per OMIP).
 
-    int i, j, tmp, cnt, status;
     int sol_loop_detect = 0;
     double old_objv_fmip, old_objv_omip;
 
-    // Setto il seme.
-    srand(5);
+    char *in_fn = NULL, *out_fn = NULL;
+    FILE *out_csv = NULL;
 
-    // Check command line arguments.
-    if (argc != 3) {
+    int i, j, tmp, cnt, opt, status;
+
+    // Check command line options.
+    while ((opt = getopt(argc, argv, "i:o:")) != -1) {
+        switch (opt) {
+            case 'i':
+                in_fn = optarg;
+                break;
+            case 'o':
+                out_fn = optarg;
+                break;
+            default:
+                print_usage(argv[0]);
+                return 1;
+        }
+    }
+
+    if (in_fn == NULL || out_fn == NULL) {
         print_usage(argv[0]);
-        goto TERMINATE;
+        return 1;
     }
 
-    out_csv = fopen(argv[2], "w+");
+    // Setto il seme.
+    srand(14081103);
+
+    out_csv = fopen(out_fn, "w+");
     if (out_csv == NULL) {
-        fprintf(stderr, "The output file %s could not be opened.\n", argv[2]);
+        fprintf(stderr, "The output file %s could not be opened.\n", out_fn);
         goto TERMINATE;
     }
 
-    printf("INPUT FILE: %s\n", argv[1]);
+    printf("INPUT FILE: %s\n", in_fn);
 
     // Inizialize the CPLEX environment.
     env = CPXopenCPLEX(&status);
@@ -1098,14 +1115,14 @@ int main(int argc, char* argv[]) {
 
     // ### Creazione del MIP, FMIP e OMIP ###
     printf("\nCreating MIP.\n");
-    mip = CPXcreateprob(env, &status, argv[1]);
+    mip = CPXcreateprob(env, &status, in_fn);
     if (mip == NULL) {
         fprintf(stderr, "Failed to create MIP.\n");
         goto TERMINATE;
     }
 
     // Read file and copy the data into the created mip1.
-    status = CPXreadcopyprob(env, mip, argv[1], NULL);
+    status = CPXreadcopyprob(env, mip, in_fn, NULL);
     if (status) {
         fprintf(stderr, "Failed to read and copy the problem data (MIP).\n");
         goto TERMINATE;
