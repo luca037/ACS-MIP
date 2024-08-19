@@ -1028,24 +1028,21 @@ int main(int argc, char *argv[]) {
     CPXENVptr env = NULL;
     CPXLPptr mip = NULL, fmip = NULL, omip = NULL;
 
-    // Variabili per le accedere alle soluzioni dei problemi.
     int numcols_mip, numcols_submip, solstat_fmip, solstat_omip;
-    double objval_fmip, objval_omip; // Objective value.
-    double *x_fmip = NULL, *x_omip = NULL; // Variabiles value.
+    double objval_fmip, objval_omip; // Objective values.
+    double *x_fmip = NULL, *x_omip = NULL; // Variabiles values.
 
-    // Variabili per il variable fixing.
-    int *int_indices = NULL; // Indici delle variabili intere.
-    int *fixed_indices = NULL; // Indici delle variabili che sono state fissate.
-    int num_int_vars; // Dimensione dei due array sopra.
-    double *initial_vector = NULL; // Vettore di valori iniziale.
-    double *lb_mip = NULL, *ub_mip = NULL; // Necessari per resettare i lb e ub
-                                           // dopo un variable fixing.
-    double slack_sum; // Somma variabili slack (per OMIP).
+    int *int_indices = NULL; // Indices of the integer variables of MIP.
+    int *fixed_indices = NULL; // Indices of the fixed variables of MIP.
+    int num_int_vars; // Ammount of integer variables of MIP.
+    double *initial_vector = NULL; // Used for the first variable fixing.
+    double *lb_mip = NULL, *ub_mip = NULL; // Used to restore the bounds.
+    double slack_sum; // For OMIP.
 
     int sol_loop_detect = 0;
     double old_objv_fmip, old_objv_omip;
 
-    char *in_fn = NULL, *out_fn = NULL;
+    char *in_fn = NULL, *out_fn = NULL; // Input and output file names.
     FILE *out_csv = NULL;
 
     int i, j, tmp, cnt, opt, status;
@@ -1070,7 +1067,7 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    // Setto il seme.
+    // Set seed.
     srand(14081103);
 
     out_csv = fopen(out_fn, "w+");
@@ -1092,13 +1089,13 @@ int main(int argc, char *argv[]) {
     }
 
     // Turn on output to the screen.
-    //status = CPXsetintparam(env, CPXPARAM_ScreenOutput, CPX_ON);
-    //if (status) {
-    //    fprintf(stderr, "Failure to turn on screen indicator, error %d\n", status);
-    //    goto TERMINATE;
-    //}
+    status = CPXsetintparam(env, CPXPARAM_ScreenOutput, CPX_ON);
+    if (status) {
+        fprintf(stderr, "Failure to turn on screen indicator, error %d\n", status);
+        goto TERMINATE;
+    }
 
-    // Set limit to explorable nodes.
+    // Set node limit.
     status = CPXsetintparam(env, CPX_PARAM_NODELIM, NODE_LIMIT);
     if (status) {
         fprintf(stderr, "Failure to set node limit, error %d\n", status);
@@ -1112,7 +1109,7 @@ int main(int argc, char *argv[]) {
         goto TERMINATE;
     }
 
-    // ### Creazione del MIP, FMIP e OMIP ###
+    // Create MIP from the input file.
     printf("\nCreating MIP.\n");
     mip = CPXcreateprob(env, &status, in_fn);
     if (mip == NULL) {
@@ -1120,13 +1117,14 @@ int main(int argc, char *argv[]) {
         goto TERMINATE;
     }
 
-    // Read file and copy the data into the created mip1.
+    // Read file and copy the data into the created MIP.
     status = CPXreadcopyprob(env, mip, in_fn, NULL);
     if (status) {
         fprintf(stderr, "Failed to read and copy the problem data (MIP).\n");
         goto TERMINATE;
     }
 
+    // Create FMIP.
     printf("\nCreating FMIP.\n");
     status = create_fmip(env, mip, &fmip);
     if (status) {
@@ -1141,6 +1139,7 @@ int main(int argc, char *argv[]) {
     //    goto TERMINATE;
     //}
 
+    // Create OMIP.
     printf("\nCreating OMIP.\n");
     status = create_omip(env, mip, &omip, 200);
     if (status) {
@@ -1148,8 +1147,8 @@ int main(int argc, char *argv[]) {
         goto TERMINATE;
     }
 
-    // ### Inizializzazione array con informazioni problema MIP ###
-    // Trovo quante sono le variabili intere di MIP.
+    // Init all the arrays that store info about MIP.
+    // Calculate the total ammount of integer variables of MIP.
     numcols_mip = CPXgetnumcols(env, mip);
     for (i = 0, num_int_vars = 0; i < numcols_mip; i++) {
         char type;
@@ -1167,8 +1166,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // Inizializzo i vettori contenenti le informazioni del problema MIP:
-    // lower bound, upper bound e indici delle variabili intere.
+    // Init: int_indices; fixed_indices; lb_mip; ub_mip.
     int_indices = (int*) malloc(num_int_vars * sizeof(int));
     fixed_indices = (int*) malloc(num_int_vars * sizeof(int));
 
@@ -1194,18 +1192,18 @@ int main(int argc, char *argv[]) {
         num_int_vars
     );
     if (status) {
-        fprintf(stderr, "Failed to initialize arrays with MIP information.\n");
+        fprintf(stderr, "Failed to initialize arrays with MIP info.\n");
         goto TERMINATE;
     }
 
-    // Inizializione vettore di valori iniziale.
+    // Init the initial vector (the starting point).
     initial_vector = (double*) malloc(numcols_mip * sizeof(double));
     if (initial_vector == NULL) {
         fprintf(stderr, "No memory for initial_vector.\n");
         goto TERMINATE;
     }
 
-    init_initial_vector(
+    generate_initial_vector(
         initial_vector,
         int_indices,
         num_int_vars,
@@ -1214,7 +1212,7 @@ int main(int argc, char *argv[]) {
         BOUND_CONSTANT
     );
 
-    // Alloco lo spazio per le soluzioni di FMIP.
+    // Allocate space for the solution of FMIP.
     numcols_submip = CPXgetnumcols(env, fmip);
     x_fmip = (double*) malloc(numcols_submip * sizeof(double));
     if (x_fmip == NULL) {
@@ -1222,23 +1220,22 @@ int main(int argc, char *argv[]) {
         goto TERMINATE;
     }
 
-    // Alloco lo spazio per le soluzioni di OMIP.
+    // Allocate space for the solution of OMIP.
     x_omip = (double*) malloc(numcols_submip * sizeof(double));
     if (x_omip == NULL) {
         fprintf(stderr, "No memory for solution values for OMIP.\n");
         goto TERMINATE;
     }
 
-    // ### Inizio ciclo di risoluzione ###
+    // ACS algorithm.
     for (cnt = 0; cnt < MAX_RUN; cnt++) {
-        // Risolvo l'FMIP: massimo 'MAX_ATTEMPTS' tentativi.
+        // Try to solve FMIP.
         for (i = 0; i < MAX_ATTEMPTS; i++) {
-            // Fisso le variabili di FMIP.
+            // Variable fixing on FMIP.
             printf("\n### Variable fixing on FMIP "
                    "- Attempt %d - Run %d ###\n", i, cnt);
-            bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a
-                                                              // zero.
-            if (cnt == 0) { // Uso l'initial vector al primo ciclo.
+            bzero(fixed_indices, num_int_vars * sizeof(int));
+            if (cnt == 0) { // Use initial vector only in the first iteration.
                 status = variable_fixing(
                     env,
                     fmip,
@@ -1248,8 +1245,8 @@ int main(int argc, char *argv[]) {
                     initial_vector,
                     30
                 );
-            } else { // Altrimenti uso i valori di OMIP.
-                if (sol_loop_detect == 1) { // Gestione loop.
+            } else { // Otherwise use OMIP's solution.
+                if (sol_loop_detect == 1) { // Mange loop.
                     status = variable_fixing(
                         env,
                         fmip,
@@ -1277,7 +1274,7 @@ int main(int argc, char *argv[]) {
                 goto TERMINATE;
             }
 
-            // Ottimizzo FMIP.
+            // Optimize FMIP.
             status = optimize_prob(
                 env,
                 fmip,
@@ -1289,6 +1286,7 @@ int main(int argc, char *argv[]) {
                 1
             );
             if (status) {
+                // If FMIP is infeasible.
                 if (solstat_fmip == CPXMIP_INFEASIBLE ||
                     solstat_fmip == CPXMIP_NODE_LIM_INFEAS ||
                     solstat_fmip == CPXMIP_TIME_LIM_INFEAS) {
@@ -1300,7 +1298,7 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-            // Restore dei bounds di FMIP.
+            // Restore bounds of FMIP.
             status = restore_bounds(
                 env,
                 fmip,
@@ -1316,41 +1314,40 @@ int main(int argc, char *argv[]) {
                 goto TERMINATE;
             }
 
-            // Se ho trovato una soluzione ottima.
+            // If the FMIP's solution is optimal.
             if (solstat_fmip == CPXMIP_OPTIMAL ||
                 solstat_fmip == CPXMIP_OPTIMAL_TOL ||
                 solstat_fmip == CPXMIP_NODE_LIM_FEAS ||
                 solstat_fmip == CPXMIP_TIME_LIM_FEAS) {
                 printf("Found an optimal solution for FMIP.\n");
-                fprintf(out_csv, "fmip,%.2f\n", objval_fmip); // Salvo in output.
+                fprintf(out_csv, "fmip,%.2f\n", objval_fmip); // Save to output.
                 break;
             } 
         }
 
-        // Se nessun FMIP è stato risolto esco.
+        // If no FMIP has been resolved.
         if (solstat_fmip == CPXMIP_INFEASIBLE ||
             solstat_fmip == CPXMIP_NODE_LIM_INFEAS ||
             solstat_fmip == CPXMIP_TIME_LIM_INFEAS) {
-            printf("All FMIPs generated was infeasibile.\n");
+            printf("All FMIPs was infeasibile.\n");
             break;
         }
         // TODO: gestire il caso in cui objval_fmip è zero: cosa faccio?
 
-        // Aggiorno il valore rhs del vincolo sulle slack di OMIP.
+        // Update the slack constraint of OMIP.
         tmp = CPXgetnumrows(env, omip) - 1;
         status = CPXchgrhs(env, omip, 1, &tmp, &objval_fmip);
         if (status) {
-            fprintf(stderr, "Failed to update rhs value of OMIP.\n");
+            fprintf(stderr, "Failed to update rhs value (slack) of OMIP.\n");
             goto TERMINATE;
         }
 
-        // Risolvo l'OMIP: massimo 'MAX_ATTEMPTS' tentativi.
+        // Try to solve OMIP.
         for (i = 0; i < MAX_ATTEMPTS; i++) {
-            // Fisso le variabili di OMIP.
+            // Variable fixing on OMIP.
             printf("\n### Variable fixing on OMIP "
                    "- Attempt %d - Run %d ###\n", i, cnt);
-            bzero(fixed_indices, num_int_vars * sizeof(int)); // Inizializzo a 
-                                                              // zero.
+            bzero(fixed_indices, num_int_vars * sizeof(int));
             status = variable_fixing(
                 env,
                 omip,
@@ -1365,7 +1362,7 @@ int main(int argc, char *argv[]) {
                 goto TERMINATE;
             }
 
-            // Ottimizzo OMIP.
+            // Optimize OMIP.
             status = optimize_prob(
                 env,
                 omip,
@@ -1377,6 +1374,7 @@ int main(int argc, char *argv[]) {
                 1
             );
             if (status) {
+                // If OMIP is infeasible.
                 if (solstat_omip == CPXMIP_INFEASIBLE ||
                     solstat_omip == CPXMIP_NODE_LIM_INFEAS ||
                     solstat_omip == CPXMIP_TIME_LIM_INFEAS) {
@@ -1388,7 +1386,7 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-            // Restore dei bounds di OMIP.
+            // Restore bounds of OMIP.
             status = restore_bounds(
                 env,
                 omip,
@@ -1404,7 +1402,7 @@ int main(int argc, char *argv[]) {
                 goto TERMINATE;
             }
 
-            // Se ho trovato una soluzione ottima.
+            // If the OMIP's solution is optimal.
             if (solstat_omip == CPXMIP_OPTIMAL ||
                 solstat_omip == CPXMIP_OPTIMAL_TOL ||
                 solstat_omip == CPXMIP_NODE_LIM_FEAS ||
@@ -1412,7 +1410,7 @@ int main(int argc, char *argv[]) {
                 slack_sum = sum(x_omip, numcols_mip, numcols_submip - 1);
                 printf("Slack sum: %.2f\n", slack_sum);
                 printf("Found an optimal solution for OMIP.\n");
-                fprintf(out_csv, "omip,%.2f\n", objval_omip); // Salvo in output.
+                fprintf(out_csv, "omip,%.2f\n", objval_omip); // Save to output.
                 if (slack_sum == 0) {
                     printf("Found a feasibile solution for MIP.\n");
                     goto TERMINATE;
@@ -1424,22 +1422,24 @@ int main(int argc, char *argv[]) {
             //       una soluzione ottima.
         }
 
-        // Se nessun OMIP è stato risolto esco.
+        // If no OMIP has been resolved.
         if (solstat_omip == CPXMIP_INFEASIBLE ||
             solstat_omip == CPXMIP_NODE_LIM_INFEAS ||
             solstat_omip == CPXMIP_TIME_LIM_INFEAS) {
-            printf("All OMIPs generated was infeasibile.\n");
+            printf("All OMIPs was infeasibile.\n");
             break;
         }
 
-        // Controllo la presenza di loop.
+        // Check for loop.
         if (cnt == 0) {
             old_objv_fmip = objval_fmip;
             old_objv_omip = objval_omip;
         } else {
+            // TODO: non funziona correttamente perché i numeri confrontati
+            //       sono di tipo double!
             if (old_objv_fmip == objval_fmip && old_objv_omip == objval_omip) {
                 sol_loop_detect = 1;
-                printf("LOOP DETECT\n");
+                printf("LOOP DETECTED\n");
             } else {
                 old_objv_fmip = objval_fmip;
                 old_objv_omip = objval_omip;
@@ -1454,7 +1454,7 @@ TERMINATE:
         fclose(out_csv);
     }
 
-    // Free up solution.
+    // Free up all the arrays.
     free_and_null((char**) &x_fmip);
     free_and_null((char**) &x_omip);
     free_and_null((char**) &int_indices);
@@ -1463,7 +1463,7 @@ TERMINATE:
     free_and_null((char**) &lb_mip);
     free_and_null((char**) &ub_mip);
 
-    // Free up the problem allocated by CPXcreateprob, if necessary.
+    // Free up the problems allocated by CPXcreateprob, if necessary.
     if (mip != NULL) {
         status = CPXfreeprob(env, &mip);
         if (status) {
