@@ -117,7 +117,6 @@ int get_colname(CPXENVptr env, CPXLPptr lp, int index, char *colname) {
     int surplus, status;
     char namestore[MAX_COLNAME_LEN];
 
-    // Ricavo il nome della colonna.
     status = CPXgetcolname(
         env,
         lp,
@@ -168,7 +167,7 @@ int init_mip_bds_and_indices(
 ) {
     int i, j, status;
 
-    // Salvo gli indici delle variabili intere di MIP.
+    // Save the indices of the integer variables of MIP.
     for (i = 0, j = 0; i < numcols; i++) {
         char type;
         status = CPXgetctype(env, mip, &type, i, i);
@@ -178,12 +177,12 @@ int init_mip_bds_and_indices(
         }
 
         if (type == CPX_BINARY || type == CPX_INTEGER) {
-            int_indices[j] = i; // Salvo l'indice della variabile.
+            int_indices[j] = i; // Save index.
             j += 1;
         }
     }
 
-    // Salvo lb e up di MIP.
+    // Save lower bounds and upper bounds of MIP.
     status = CPXgetub(env, mip, ub, 0, numcols - 1);
     if (status) {
         fprintf(stderr, "Failed to copy upper bounds coefficients of SRC.\n");
@@ -237,7 +236,7 @@ int restore_bounds(
 
     for (i = 0; i < num_int_vars; i++) {
         if (fixed_indices[i]) { // Se è stata fissata.
-            // Reset lower bound.
+            // Reset lower bounds.
             status = CPXchgbds(
                 env,
                 lp,
@@ -251,7 +250,7 @@ int restore_bounds(
                                 "of variable %d.\n", int_indices[i]);
                 return status;
             }
-            // Reset upper bound.
+            // Reset upper bounds.
             status = CPXchgbds(
                 env,
                 lp,
@@ -284,7 +283,7 @@ int restore_bounds(
  * ub: An array where are stored all the upper bounds.
  * cb: The fixed bound constant.
  */
-void init_initial_vector(
+void generate_initial_vector(
     double *initial_vector,
     int *int_indices,
     int num_int_vars,
@@ -350,23 +349,24 @@ int variable_fixing(
     int percentage
 ) {
     int i, tmp, cnt, rnd, status;
-    double val; // Valore a cui fisso la var scelta.
+    double val;
     char lu = 'B';
 
-    // Numero di variabili da fissare.
+    // Number of variables to fix.
     cnt = num_int_vars * percentage / 100;
     printf("Variables to fix: %d\n", cnt);
 
-    // Genero una posizione random di 'int_indices'.
+    // Choose a random position of 'int_indices', 
+    // aka choose an integer variable's index.
     rnd = rand() % num_int_vars;
 
-    // Fisso cnt variabili intere a partire dall'indice estratto.
+    // Fix 'cnt' integer variables startig form the previously choosen index.
     for (i = 0; i < cnt; i++) {
         // Prelevo il valore.
         tmp = (rnd + i) % num_int_vars;
         val = x[int_indices[tmp]];
 
-        // Fisso il valore della variabile.
+        // Fix variable's value.
         status = CPXchgbds(env, lp, 1, &int_indices[tmp], &lu, &val);
         if (status) {
             fprintf(stderr, 
@@ -474,6 +474,7 @@ int optimize_prob(
         return status;
     }
 
+    // If verbose is set print solution info.
     if (verbose) {
         printf("Solution status: %d\n", *solstat);
         printf("Objective value: %.2f\n", *objval);
@@ -536,7 +537,7 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
         goto TERMINATE;
     }
 
-    // Alloco spazio per i nomi.
+    // Allocate space for the names.
     for (i = 0; i < ccnt; i++) {
         colnames[i] = (char*) malloc(MAX_SLACK_NAMES_LEN * sizeof(char));
         if (colnames[i] == NULL) {
@@ -546,26 +547,26 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
         }
     }
 
-    // Assegno i nomi alle variabili slack.
+    // Assign slack variables names.
     for (i = 0; i < numrows; i++) {
         snprintf(colnames[i], MAX_SLACK_NAMES_LEN, "dp%d", i + 1);
         snprintf(colnames[i + numrows], MAX_SLACK_NAMES_LEN, "dn%d", i + 1);
     }
 
-    // Inizializzo: matbeg.
+    // Init: matbeg.
     for (i = 0; i < ccnt; i++) {
         matbeg[i] = i * numrows;
     }
 
-    // Inizializzo: matind; matval.
+    // Init: matind; matval.
     for (i = 0; i < nzcnt; i++) {
-        // matind = [0,...,m-1,0,...,m-1,...] dove m = numrows.
+        // matind = [0,...,m-1,0,...,m-1,...] where m = numrows.
         matind[i] = i % numrows; 
-        // matval ha i primi nzcnt/2 valori a 1 e i restanti nzcnt/2 a -1.
+        // matval = first nzcnt/2 values set to 1, the remaning nzcnt/2 to -1.
         matval[i] = (i < nzcnt / 2)? 1 : -1;
     }
 
-    // Ora posso aggiungere le colonne di slack.
+    // Adding slack variables (columns).
     status = CPXaddcols(
         env,
         lp,
@@ -583,12 +584,11 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
         fprintf(stderr, "Failed to add new columns to the problem.\n");
         goto TERMINATE;
     }
-    // Nota che non aggiorno il numero di colonne. Quindi numcols indica
-    // il numero di colonne senza considerare le variabili slack aggiunte.
+    // Note that 'numcols' is not updated, thus it contains the number of
+    // columns without considering the slack variables that we added before.
 
-    // Setto il tipo delle slack.
-    // Gli indici delle variabili slack nella matrice dei vincoli, appartengono
-    // al seguente range:
+    // Set the type of the slack variables.
+    // Their indices belong to the following range:
     //      [numcols, ..., numcols + ccnt]
     ctype = CPX_CONTINUOUS;
     tmp = numcols + ccnt;
@@ -638,7 +638,7 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
 
     int nzcnt, surplus;
 
-    // Salvo i nomi delle variabili di SRC.
+    // Save the variables names of SRC.
     status = CPXgetcolname(env, src, NULL, NULL, 0, &surplus, 0, numcols - 1);
     if (status != CPXERR_NEGATIVE_SURPLUS) {
         fprintf(stderr, "Failed to get columns names size.\n");
@@ -668,7 +668,7 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         goto TERMINATE;
     }
 
-    // Salvo i nomi dei vincoli di SRC.
+    // Save the constraints names of SRC.
     status = CPXgetrowname(env, src, NULL, NULL, 0, &surplus, 0, numrows - 1);
     if (status != CPXERR_NEGATIVE_SURPLUS) {
         fprintf(stderr, "Failed to get constraints names size.\n");
@@ -698,7 +698,7 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         goto TERMINATE;
     }
 
-    // Salvo i coefficienti della funzione obiettivo del problema SRC.
+    // Save the objective function's coefficients of SRC.
     obj = (double*) malloc(numcols * sizeof(double));
     if (obj == NULL) {
         fprintf(stderr, "No memory for saving obj of SRC.\n");
@@ -712,7 +712,7 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         goto TERMINATE;
     }
 
-    // Salvo i coefficienti rhs dei vincoli del problema SRC.
+    // Save the right hand side coefficients of SRC.
     rhs = (double*) malloc(numrows * sizeof(double));
     if (rhs == NULL) {
         fprintf(stderr, "No memory for saving rhs of SRC.\n");
@@ -726,7 +726,7 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         goto TERMINATE;
     }
 
-    // Salvo il senso (>=, <=, =) dei vincoli del problema SRC.
+    // Save the righ hand side sense (thus >=, <=, =) of SRC.
     sense = (char*) malloc(numrows * sizeof(double));
     if (sense == NULL) {
         fprintf(stderr, "No memory for saving sense of SRC.\n");
@@ -740,7 +740,7 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         goto TERMINATE;
     }
 
-    // Salvo i dati della matrice dei vincoli di SRC.
+    // Save the constraints matrix's information of SRC.
     matbeg = (int*) malloc(numcols * sizeof(int));
     matind = (int*) malloc(numnz * sizeof(int));
     matcnt = (int*) malloc(numcols * sizeof(int));
@@ -760,13 +760,13 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         goto TERMINATE;
     }
 
-    // Calcolo delle componenti di matcnt.
+    // Calculate matcnt's values.
     for (i = 0; i < numcols - 1; i++) {
         matcnt[i] = matbeg[i+1] - matbeg[i];
     }
     matcnt[numcols - 1] = nzcnt - matbeg[numcols - 1];
 
-    // Salvo i lower bound e upper bound delle variabili.
+    // Save lower bounds and upperbounds of SRC.
     ub = (double*) malloc(numcols * sizeof(double));
     lb = (double*) malloc(numcols * sizeof(double));
     if (ub == NULL || lb == NULL) {
@@ -788,7 +788,7 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         goto TERMINATE;
     }
 
-    // Salvo la tipologia delle variabili del problema SRC.
+    // Save variables types of SRC.
     xctype = (char*) malloc(numcols * sizeof(char));
     if (xctype == NULL) {
         fprintf(stderr, "No memory for saving variables types of SRC.\n");
@@ -802,8 +802,8 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         goto TERMINATE;
     }
 
-    // Ora posso crere la copia del problema SRC in DST.
-    // TODO: non gestisco rngval (settato a NULL).
+    // Create DST, the copy of SRC.
+    // TODO: manage rngval (is the NULL parameter).
     status = CPXcopylpwnames(
         env,
         dst,
@@ -828,7 +828,7 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         goto TERMINATE;
     }
 
-    // Setto la tipologia delle variabili del problema DST.
+    // Set variables types of DST.
     status = CPXcopyctype(env, dst, xctype);
     if (status) {
         fprintf(stderr, "Failed to set variables types of DST.\n");
@@ -883,18 +883,17 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
         return status;
     }
 
-    // Introduco le variabili slack.
+    // Add slack variables.
     status = add_slack_cols(env, *fmip);
     if (status) {
         fprintf(stderr, "Failed to add slack columns to FMIP.\n");
         return status;
     }
-    // Nota che il numero di colonne di FMIP non viene aggiornato dopo
-    // aver aggiunto le variabili slack. Ciò significa che numcols indica
-    // il numero di colonne senza considerare le variabili di slack.
+    // Note that 'numcols' is not updated, thus it contains the number of
+    // columns without considering the slack variables that we added before.
 
-    // Modifico la funzone obiettivo.
-    // Prima setto i coeffcienti delle variabili xi a zero.
+    // Modify objective function.
+    // First set all variables coefficients to zero.
     for (i = 0, tmp = 0; i < numcols; i++) {
         status = CPXchgobj(env, *fmip, 1, &i, &tmp);
         if (status) {
@@ -904,8 +903,8 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
         }
     }
 
-    // Ora setto i coefficienti delle variabili slack a 1.
-    // Gli indici delle variabili slack sono: [numcols, ..., cnt - 1]
+    // Then set slack coefficients to 1. Slack's indices goes from:
+    //      [numcols, ..., cnt - 1]
     cnt = CPXgetnumcols(env, *fmip);
     for (i = numcols, tmp = 1; i < cnt; i++) {
         status = CPXchgobj(env, *fmip, 1, &i, &tmp);
@@ -916,7 +915,7 @@ int create_fmip(CPXENVptr env, CPXLPptr mip, CPXLPptr *fmip) {
         }
     }
 
-    // Cambio il senso del problema a minimizzazione.
+    // Change objective sense to minimization.
     if (CPXgetobjsen(env, *fmip) != CPX_MIN) {
         status = CPXchgobjsen(env, *fmip, CPX_MIN);
         if (status) {
@@ -965,19 +964,18 @@ int create_omip(CPXENVptr env, CPXLPptr mip, CPXLPptr *omip, double rhs_slack) {
         goto TERMINATE;
     }
 
-    // Introduco le variabili slack.
+    // Add slack variables.
     status = add_slack_cols(env, *omip);
     if (status) {
         fprintf(stderr, "Failed to add slack columns to OMIP.\n");
         goto TERMINATE;
     }
-    // Nota che il numero di colonne di OMIP non viene aggiornato dopo
-    // aver aggiunto le variabili slack. Ciò significa che numcols indica
-    // il numero di colonne senza considerare le variabili di slack.
+    // Note that 'numcols' is not updated, thus it contains the number of
+    // columns without considering the slack variables that we added before.
 
-    // Aggiungo il vincolo che limita il grado della non ammissibilità.
+    // Add constraint (row) that limits the sum of the slack variables.
     sense = 'L';
-    slack_cnt = CPXgetnumcols(env, *omip) - numcols; // Slack da aggiungere.
+    slack_cnt = CPXgetnumcols(env, *omip) - numcols; // Num of slack to add.
 
     rmatbeg = 0;
     rmatind = (int*) malloc(slack_cnt * sizeof(int));
@@ -990,13 +988,14 @@ int create_omip(CPXENVptr env, CPXLPptr mip, CPXLPptr *omip, double rhs_slack) {
     }
 
     // Inizializzo i valori di matind e matval.
+    // Init: matind; matval.
     for (i = 0; i < slack_cnt; i++) {
-        rmatind[i] = i + numcols; // Gli indici delle slack: 
-                                  //    [numcols, ..., numcols + slack_cnt - 1]
-        rmatval[i] = 1;
+        rmatind[i] = i + numcols; // Slack's indices goes from: 
+                                  //   [numcols, ..., numcols + slack_cnt - 1].
+        rmatval[i] = 1; // All coefficients equal to 1.
     }
 
-    // Ora posso aggiungere la nuova riga della matrice dei vincoli.
+    // Add the new constraint to the matrix.
     status = CPXaddrows(
         env,
         *omip,
