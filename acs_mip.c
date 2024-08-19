@@ -1448,12 +1448,18 @@ int main(int argc, char *argv[]) {
     }
 
 TERMINATE:
+    
+    // Close output file, if necessary.
+    if (out_csv != NULL) {
+        fclose(out_csv);
+    }
 
     // Free up solution.
     free_and_null((char**) &x_fmip);
     free_and_null((char**) &x_omip);
     free_and_null((char**) &int_indices);
     free_and_null((char**) &fixed_indices);
+    free_and_null((char**) &initial_vector);
     free_and_null((char**) &lb_mip);
     free_and_null((char**) &ub_mip);
 
