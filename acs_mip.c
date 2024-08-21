@@ -293,12 +293,12 @@ void generate_initial_vector(
 ) {
     int i, upper, lower, val;
     
-    printf("\n");
+    //printf("\n");
     for (i = 0; i < num_int_vars; i++) {
         upper = (int) min(ub[int_indices[i]], cb);
         lower = (int) max(lb[int_indices[i]], -cb);
         val = (int) (rand() % (upper - lower + 1)) + lower;
-        printf("Col: %d, upper: %d, lower: %d, val: %d\n", int_indices[i], upper, lower, val);
+        //printf("Col: %d, upper: %d, lower: %d, val: %d\n", int_indices[i], upper, lower, val);
         // (rand() % (upper – lower + 1)) + lower 
         initial_vector[int_indices[i]] = val;
     }
