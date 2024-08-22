@@ -1039,9 +1039,6 @@ int main(int argc, char *argv[]) {
     double *lb_mip = NULL, *ub_mip = NULL; // Used to restore the bounds.
     double slack_sum; // For OMIP.
 
-    int sol_loop_detect = 0;
-    double old_objv_fmip, old_objv_omip;
-
     char *in_fn = NULL, *out_fn = NULL; // Input and output file names.
     FILE *out_csv = NULL;
 
@@ -1196,21 +1193,12 @@ int main(int argc, char *argv[]) {
         goto TERMINATE;
     }
 
-    // Init the initial vector (the starting point).
+    // Allocate space for the initial vector (the starting point).
     initial_vector = (double*) malloc(numcols_mip * sizeof(double));
     if (initial_vector == NULL) {
         fprintf(stderr, "No memory for initial_vector.\n");
         goto TERMINATE;
     }
-
-    generate_initial_vector(
-        initial_vector,
-        int_indices,
-        num_int_vars,
-        lb_mip,
-        ub_mip,
-        BOUND_CONSTANT
-    );
 
     // Allocate space for the solution of FMIP.
     numcols_submip = CPXgetnumcols(env, fmip);
@@ -1236,6 +1224,14 @@ int main(int argc, char *argv[]) {
                    "- Attempt %d - Run %d ###\n", i, cnt);
             bzero(fixed_indices, num_int_vars * sizeof(int));
             if (cnt == 0) { // Use initial vector only in the first iteration.
+                generate_initial_vector(
+                    initial_vector,
+                    int_indices,
+                    num_int_vars,
+                    lb_mip,
+                    ub_mip,
+                    BOUND_CONSTANT
+                );
                 status = variable_fixing(
                     env,
                     fmip,
@@ -1246,28 +1242,15 @@ int main(int argc, char *argv[]) {
                     30
                 );
             } else { // Otherwise use OMIP's solution.
-                if (sol_loop_detect == 1) { // Mange loop.
-                    status = variable_fixing(
-                        env,
-                        fmip,
-                        int_indices,
-                        fixed_indices,
-                        num_int_vars,
-                        x_omip,
-                        30
-                    );
-                    sol_loop_detect = 0;
-                } else {
-                    status = variable_fixing(
-                        env,
-                        fmip,
-                        int_indices,
-                        fixed_indices,
-                        num_int_vars,
-                        x_omip,
-                        50
-                    );
-                }
+                status = variable_fixing(
+                    env,
+                    fmip,
+                    int_indices,
+                    fixed_indices,
+                    num_int_vars,
+                    x_omip,
+                    50
+                );
             }
             if (status) {
                 fprintf(stderr, "Failed to fix variables of FMIP.\n");
@@ -1428,22 +1411,6 @@ int main(int argc, char *argv[]) {
             solstat_omip == CPXMIP_TIME_LIM_INFEAS) {
             printf("All OMIPs was infeasibile.\n");
             break;
-        }
-
-        // Check for loop.
-        if (cnt == 0) {
-            old_objv_fmip = objval_fmip;
-            old_objv_omip = objval_omip;
-        } else {
-            // TODO: non funziona correttamente perché i numeri confrontati
-            //       sono di tipo double!
-            if (old_objv_fmip == objval_fmip && old_objv_omip == objval_omip) {
-                sol_loop_detect = 1;
-                printf("LOOP DETECTED\n");
-            } else {
-                old_objv_fmip = objval_fmip;
-                old_objv_omip = objval_omip;
-            }
         }
     }
 
