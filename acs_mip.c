@@ -191,7 +191,7 @@ int init_mip_bds_and_indices(
 
     status = CPXgetlb(env, mip, lb, 0, numcols - 1);
     if (status) {
-        fprintf(stderr, "Failed to copy upper bounds coefficients of SRC.\n");
+        fprintf(stderr, "Failed to copy lower bounds coefficients of SRC.\n");
         return status;
     }
 
@@ -609,7 +609,7 @@ TERMINATE:
     }
     free_and_null(colnames);
 
-    return 0;
+    return status;
 }
 
 
@@ -784,7 +784,7 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
 
     status = CPXgetlb(env, src, lb, 0, numcols - 1);
     if (status) {
-        fprintf(stderr, "Failed to copy upper bounds coefficients of SRC.\n");
+        fprintf(stderr, "Failed to copy lower bounds coefficients of SRC.\n");
         goto TERMINATE;
     }
 
@@ -798,7 +798,7 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
 
     status = CPXgetctype(env, src, xctype, 0, numcols - 1);
     if (status) {
-        fprintf(stderr, "Failed to copy upper bounds coefficients of SRC.\n");
+        fprintf(stderr, "Failed to copy variables types of SRC.\n");
         goto TERMINATE;
     }
 
@@ -851,7 +851,7 @@ TERMINATE:
     free_and_null((char**) &rownames);
     free_and_null(&rownamestore);
 
-    return 0;
+    return status;
 }
 
 
@@ -1020,7 +1020,7 @@ TERMINATE:
     free_and_null((char**) &rmatind);
     free_and_null((char**) &rmatval);
 
-    return 0;
+    return status;
 }
 
 
