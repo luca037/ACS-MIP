@@ -442,13 +442,26 @@ int optimize_prob(
     int verbose
 ) {
     int status;
-    int numcols = CPXgetnumcols(env, lp);
+    int numcols = CPXgetnumcols(env, lp), prob_t = CPXgetprobtype(env, lp);
 
-    // Optimize lp and obtain solution.
-    status = CPXmipopt(env, lp);
-    if (status) {
-        fprintf(stderr, "Failed to optimize lp.\n");
-        return status;
+    // Optimize lp.
+    switch (prob_t) {
+        case CPXPROB_LP:
+            status = CPXlpopt(env, lp);
+            if (status) {
+                fprintf(stderr, "Failed to optimize lp.\n");
+                return status;
+            }
+            break;
+        case CPXPROB_MILP:
+            status = CPXmipopt(env, lp);
+            if (status) {
+                fprintf(stderr, "Failed to optimize lp.\n");
+                return status;
+            }
+            break;
+        default:
+            fprintf(stderr, "Type of problem (%d) not supported lp.\n", prob_t);
     }
 
     // Get solution status.
