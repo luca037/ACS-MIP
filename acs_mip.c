@@ -1158,14 +1158,6 @@ int main(int argc, char *argv[]) {
     //    goto TERMINATE;
     //}
 
-    // Create OMIP.
-    printf("\nCreating OMIP.\n");
-    status = create_omip(env, mip, &omip, 200);
-    if (status) {
-        fprintf(stderr, "Failed to create OMIP.\n");
-        goto TERMINATE;
-    }
-
     // Init all the arrays that store info about MIP.
     // Calculate the total ammount of integer variables of MIP.
     numcols_mip = CPXgetnumcols(env, mip);
@@ -1174,7 +1166,7 @@ int main(int argc, char *argv[]) {
 
         status = CPXgetctype(env, mip, &type, i, i);
         if (status) {
-            fprintf(stderr, "Failed to get variable %d type.", i);
+            fprintf(stderr, "Failed to get variable %d type.\n", i);
             goto TERMINATE;
         }
 
@@ -1237,23 +1229,34 @@ int main(int argc, char *argv[]) {
         goto TERMINATE;
     }
 
+    // Generate the starting point.
+    printf("\n### Generate starting point ###\n");
+    status = generate_initial_vector(
+        env,
+        fmip,
+        initial_vector,
+        int_indices,
+        num_int_vars,
+        lb_mip,
+        ub_mip,
+        numcols_mip,
+        BOUND_CONSTANT,
+        25
+    );
+    if (status) {
+        fprintf(stderr, "Failed to generate initial vector.\n");
+        goto TERMINATE;
+    }
+
     // ACS algorithm.
-    for (cnt = 0; cnt < MAX_RUN; cnt++) {
+    for (cnt = 0; cnt < MAX_ITR; cnt++) {
         // Try to solve FMIP.
         for (i = 0; i < MAX_ATTEMPTS; i++) {
             // Variable fixing on FMIP.
             printf("\n### Variable fixing on FMIP "
-                   "- Attempt %d - Run %d ###\n", i, cnt);
+                   "- Attempt %d - Iteration %d ###\n", i, cnt);
             bzero(fixed_indices, num_int_vars * sizeof(int));
             if (cnt == 0) { // Use initial vector only in the first iteration.
-                generate_initial_vector(
-                    initial_vector,
-                    int_indices,
-                    num_int_vars,
-                    lb_mip,
-                    ub_mip,
-                    BOUND_CONSTANT
-                );
                 status = variable_fixing(
                     env,
                     fmip,
@@ -1261,7 +1264,7 @@ int main(int argc, char *argv[]) {
                     fixed_indices,
                     num_int_vars,
                     initial_vector,
-                    30
+                    50
                 );
             } else { // Otherwise use OMIP's solution.
                 status = variable_fixing(
@@ -1293,9 +1296,6 @@ int main(int argc, char *argv[]) {
             if (status) {
                 // If FMIP is infeasible.
                 switch (solstat_fmip) {
-                    case CPXMIP_INFEASIBLE:
-                        printf("FMIP is infeasible.\n");
-                        break;
                     case CPXMIP_NODE_LIM_INFEAS:
                         printf("FMIP is infeasible (Node limit).\n");
                         break;
@@ -1303,7 +1303,8 @@ int main(int argc, char *argv[]) {
                         printf("FMIP is infeasible (Time limit).\n");
                         break;
                     default:
-                        fprintf(stderr, "Failed to optimize FMIP (Unknown)\n"
+                        fprintf(stderr, "Failed to optimize FMIP "
+                                        "(Unknown status)\n"
                                         "Solution status: %d\n", solstat_fmip);
                         goto TERMINATE;
                 }
@@ -1356,19 +1357,28 @@ int main(int argc, char *argv[]) {
             break;
         }
 
-        // Update the slack constraint of OMIP.
-        tmp = CPXgetnumrows(env, omip) - 1;
-        status = CPXchgrhs(env, omip, 1, &tmp, &objval_fmip);
-        if (status) {
-            fprintf(stderr, "Failed to update rhs value (slack) of OMIP.\n");
-            goto TERMINATE;
+        // Create OMIP in the first iteration.
+        if (cnt == 0) {
+            printf("\nCreating OMIP.\n");
+            status = create_omip(env, mip, &omip, objval_fmip);
+            if (status) {
+                fprintf(stderr, "Failed to create OMIP.\n");
+                goto TERMINATE;
+            }
+        } else { // Update the slack constraint of OMIP.
+            tmp = CPXgetnumrows(env, omip) - 1;
+            status = CPXchgrhs(env, omip, 1, &tmp, &objval_fmip);
+            if (status) {
+                fprintf(stderr, "Failed to update rhs value (slack) of OMIP.\n");
+                goto TERMINATE;
+            }
         }
 
         // Try to solve OMIP.
         for (i = 0; i < MAX_ATTEMPTS; i++) {
             // Variable fixing on OMIP.
             printf("\n### Variable fixing on OMIP "
-                   "- Attempt %d - Run %d ###\n", i, cnt);
+                   "- Attempt %d - Iteration %d ###\n", i, cnt);
             bzero(fixed_indices, num_int_vars * sizeof(int));
             status = variable_fixing(
                 env,
@@ -1398,9 +1408,6 @@ int main(int argc, char *argv[]) {
             if (status) {
                 // If OMIP is infeasible.
                 switch (solstat_omip) {
-                    case CPXMIP_INFEASIBLE:
-                        printf("OMIP is infeasible.\n");
-                        break;
                     case CPXMIP_NODE_LIM_INFEAS:
                         printf("OMIP is infeasible (Node limit).\n");
                         break;
@@ -1430,6 +1437,9 @@ int main(int argc, char *argv[]) {
                 goto TERMINATE;
             }
 
+            slack_sum = sum(x_omip, numcols_mip, numcols_submip - 1);
+            printf("Slack sum: %.2f\n", slack_sum);
+
             // If the OMIP's solution is feasibile.
             switch (solstat_omip) {
                 case CPXMIP_OPTIMAL:
@@ -1453,8 +1463,6 @@ int main(int argc, char *argv[]) {
             }
 
             // Check sum of slack variables.
-            slack_sum = sum(x_omip, numcols_mip, numcols_submip - 1);
-            printf("Slack sum: %.2f\n", slack_sum);
             if (slack_sum == 0) {
                 printf("Found a feasibile solution for MIP.\n");
                 goto TERMINATE;
