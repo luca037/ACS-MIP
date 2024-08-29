@@ -28,15 +28,15 @@
 /* Optimizer time limit (seconds). */
 #define TIME_LIMIT 180.0
 
-/* Maximum number of run. A run is complete when the solver has found an
- * optimal solution for FMIP and then an optimal solution for OMIP. */
-#define MAX_RUN 50
+/* Maximum number of iteration. An iteration is complete when the solver has 
+ * found a feasibile solution for FMIP and then a feasibile solution for OMIP. */
+#define MAX_ITR 15
 
 /* It's used for initializing the starting vector. The value of the variable
  * is raondomly choosen from the range
  *      [max(lb, BOUND_CONSTANT), min(ub, BOUND_CONSTANT)]
  *  where lb is the lower bound of the variable and ub is its upper bound. */
-#define BOUND_CONSTANT 10E6
+#define BOUND_CONSTANT 10E5
 
 
 /**
@@ -504,23 +504,19 @@ int optimize_prob(
  */
 int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
     int i, tmp, status;
-    char ctype;
+    char ctype, sense;
 
     int numrows = CPXgetnumrows(env, lp);
     int numcols = CPXgetnumcols(env, lp);
 
-    int ccnt = 2 * numrows; // Numero di colonne (slack) da aggiungere.
-                            // I vettori slack hanno dimensione pari al
-                            // numero di righe della matrice dei vincoli.
-    int nzcnt = 2 * numrows * numrows; // Non zero coefficients counter.
-                                       // Tutti i coefficienti sono diversi 
-                                       // da zero.
-
-    printf("Slack variables to add: %d\n", ccnt);
+    int ccnt = 2 * numrows; // Tot slack vars to add.
+    int nzcnt = 2 * numrows; // Non zero coefficients counter.
 
     double *matval = NULL;
     int *matbeg = NULL, *matind = NULL;
     char **colnames = NULL;
+
+    printf("Slack variables to add: %d\n", ccnt);
 
     matbeg = (int*) malloc(ccnt * sizeof(int));
     matind = (int*) malloc(nzcnt * sizeof(int));
@@ -555,15 +551,40 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
 
     // Init: matbeg.
     for (i = 0; i < ccnt; i++) {
-        matbeg[i] = i * numrows;
+        matbeg[i] = i;
     }
 
     // Init: matind; matval.
-    for (i = 0; i < nzcnt; i++) {
+    for (i = 0; i < numrows; i++) {
         // matind = [0,...,m-1,0,...,m-1,...] where m = numrows.
-        matind[i] = i % numrows; 
-        // matval = first nzcnt/2 values set to 1, the remaning nzcnt/2 to -1.
-        matval[i] = (i < nzcnt / 2)? 1 : -1;
+        matind[i] = matind[i + numrows] = i; 
+
+        // matval = first numrows values set to 1, the remaning numrows to -1.
+        status = CPXgetsense(env, lp, &sense, i, i);
+        if (status) {
+            fprintf(stderr, "Failed to get constraint %d sense.\n", i);
+            goto TERMINATE;
+        }
+
+        // Scheme: (s := slack var)
+        //      if   ax <= b   then   ax - s       <= b
+        //      if   ax >= b   then   ax + s       >= b
+        //      if   ax  = b   then   ax + s1 - s2  = b
+        switch (sense) {
+            case 'L':
+                matval[i] = 0;
+                matval[i + numrows] = -1;
+                break;
+            case 'G':
+                matval[i] = 1;
+                matval[i + numrows] = 0;
+                break;
+            case 'E':
+                matval[i] = 1;
+                matval[i + numrows] = -1;
+                break;
+        }
+        // TODO: Non viene gestito il ranged constraint.
     }
 
     // Adding slack variables (columns).
@@ -843,6 +864,7 @@ TERMINATE:
     free_and_null((char**) &matbeg);
     free_and_null((char**) &matind);
     free_and_null((char**) &matval);
+    free_and_null((char**) &matcnt);
     free_and_null((char**) &ub);
     free_and_null((char**) &lb);
     free_and_null(&xctype);
