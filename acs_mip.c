@@ -21,13 +21,13 @@
 
 /* Maximum number of attempts to solve FMIP/OMIP that has no solution due to
  * infeasability. */
-#define MAX_ATTEMPTS 200
+#define MAX_ATTEMPTS 1
 
 /* Maximum number of nodes explored during optimization. */
-#define NODE_LIMIT 2000
+#define NODE_LIMIT 1000
 
 /* Optimizer time limit (seconds). */
-#define TIME_LIMIT 180.0
+#define TIME_LIMIT 60
 
 /* Maximum number of iteration. An iteration is complete when the solver has 
  * found a feasibile solution for FMIP and then a feasibile solution for OMIP. */
@@ -173,7 +173,7 @@ int init_mip_bds_and_indices(
         char type;
         status = CPXgetctype(env, mip, &type, i, i);
         if (status) {
-            fprintf(stderr, "Failed to get variable %d type.", i);
+            fprintf(stderr, "Failed to get variable %d type.\n", i);
             return status;
         }
 
@@ -1320,12 +1320,11 @@ int create_omip(CPXENVptr env, CPXLPptr mip, CPXLPptr *omip, double rhs_slack) {
         goto TERMINATE;
     }
 
-    // Inizializzo i valori di matind e matval.
     // Init: matind; matval.
     for (i = 0; i < slack_cnt; i++) {
         rmatind[i] = i + numcols; // Slack's indices goes from: 
                                   //   [numcols, ..., numcols + slack_cnt - 1].
-        rmatval[i] = 1; // All coefficients equal to 1.
+        rmatval[i] = 1; // All coefficients are set to 1.
     }
 
     // Add the new constraint to the matrix.
@@ -1641,19 +1640,15 @@ int main(int argc, char *argv[]) {
             switch (solstat_fmip) {
                 case CPXMIP_OPTIMAL:
                     printf("Found a feasibile solution for FMIP (Optimal).\n");
-                    fprintf(out_csv, "fmip,%.2f\n", objval_fmip); // Save to output.
                     break;
                 case CPXMIP_OPTIMAL_TOL:
                     printf("Found a feasibile solution for FMIP (Optimal tollerance).\n");
-                    fprintf(out_csv, "fmip,%.2f\n", objval_fmip); // Save to output.
                     break;
                 case CPXMIP_NODE_LIM_FEAS:
-                    printf("Found a feasibile solution for FMIP (Node limit).\n");
                     fprintf(out_csv, "fmip,%.2f\n", objval_fmip); // Save to output.
                     break;
                 case CPXMIP_TIME_LIM_FEAS:
                     printf("Found a feasibile solution for FMIP (Time limit).\n");
-                    fprintf(out_csv, "fmip,%.2f\n", objval_fmip); // Save to output.
                     break;
                 default:
                     continue; // Try to solve another FMIP.
@@ -1755,23 +1750,23 @@ int main(int argc, char *argv[]) {
             switch (solstat_omip) {
                 case CPXMIP_OPTIMAL:
                     printf("Found a feasibile solution for OMIP (Optimal).\n");
-                    fprintf(out_csv, "omip,%.2f\n", objval_omip); // Save to output.
                     break;
                 case CPXMIP_OPTIMAL_TOL:
                     printf("Found a feasibile solution for OMIP (Optimal tollerance).\n");
-                    fprintf(out_csv, "omip,%.2f\n", objval_omip); // Save to output.
                     break;
                 case CPXMIP_NODE_LIM_FEAS:
                     printf("Found a feasibile solution for OMIP (Node limit).\n");
-                    fprintf(out_csv, "omip,%.2f\n", objval_omip); // Save to output.
                     break;
                 case CPXMIP_TIME_LIM_FEAS:
                     printf("Found a feasibile solution for OMIP (Time limit).\n");
-                    fprintf(out_csv, "omip,%.2f\n", objval_omip); // Save to output.
                     break;
                 default:
                     continue; // Try to solve another OMIP.
             }
+
+            // Save results to the csv output file.
+            fprintf(out_csv, "fmip,%.2f\n", objval_fmip);
+            fprintf(out_csv, "omip,%.2f\n", objval_omip);
 
             // Check sum of slack variables.
             if (slack_sum == 0) {
