@@ -151,8 +151,7 @@ int get_colname(CPXENVptr env, CPXLPptr lp, int index, char *colname) {
  *     This array must be of length at least numcols.
  * numcols: The length of the arrays lp and up.
  * int_indices: An array where the indices of integer variables are to be
- *              returned.
- *              This array must be of length at least num_int_vars.
+ *              returned. This array must be of length at least num_int_vars.
  * num_int_vars: The length of the array int_indices.
  *
  * return: Returns 0 if successful and nonzero if an error occurs.
@@ -205,15 +204,14 @@ int init_mip_bds_and_indices(
  * variables that was fixed by variable_fixing.
  *
  * env: A pointer to the CPLEX environment.
- * lp: A pointer to a CPLEX problem object.
+ * mip: A pointer to a CPLEX problem object.
  * lb: An array where are stored all the lower bounds of lp.
  *     This array must be of length at least numcols.
  * ub: An array where are stored all the upper bounds of lp.
  *     This array must be of length at least numcols.
  * numcols: The length of the arrays lb and up.
  * int_indices: An array where are stored the indices of the integer variables
- *              of lp.
- *              This array must be of length at least num_int_vars.
+ *              of lp. This array must be of length at least num_int_vars.
  * fixed_indices: An array that tells if a variable was fixed.
  *                A variable with index int_indices[i] was fixed if and only if 
  *                fixed_indices[i] is a nonzero value.
@@ -224,7 +222,7 @@ int init_mip_bds_and_indices(
  */
 int restore_bounds(
     CPXENVptr env,
-    CPXLPptr lp,
+    CPXLPptr mip,
     double *lb,
     double *ub,
     int *int_indices,
@@ -239,7 +237,7 @@ int restore_bounds(
             // Reset lower bounds.
             status = CPXchgbds(
                 env,
-                lp,
+                mip,
                 1,
                 &int_indices[i],
                 &lower,
@@ -253,7 +251,7 @@ int restore_bounds(
             // Reset upper bounds.
             status = CPXchgbds(
                 env,
-                lp,
+                mip,
                 1,
                 &int_indices[i],
                 &upper,
@@ -326,7 +324,7 @@ int variable_fixing(
     // aka choose an integer variable's index.
     rnd = rand() % num_int_vars;
 
-    // Fix 'cnt' integer variables startig form the previously choosen index.
+    // Fix 'cnt' integer variables starting form the previously choosen index.
     for (i = 0; i < cnt; i++) {
         // Prelevo il valore.
         tmp = (rnd + i) % num_int_vars;
@@ -353,30 +351,6 @@ int variable_fixing(
     //}
     //printf("\n");
 
-
-    // Old version.
-    //for (i = 0; i < cnt; ) {
-    //    // Genero una posizione random di 'index'.
-    //    rnd = rand() % num_int_vars;
-    //    // Se è già stata fissata la variabile genero un altro valore.
-    //    if (fixed_indices[rnd] == 1) {
-    //        continue;
-    //    }
-
-    //    val = x[int_indices[rnd]];
-
-    //    // Fisso il valore della variabile.
-    //    status = CPXchgbds(env, lp, 1, &int_indices[rnd], &lu, &val);
-    //    if (status) {
-    //        fprintf(stderr, 
-    //                "Failed to fix variable with index %d.\n", int_indices[rnd]);
-    //        return status;
-    //    }
-    //    fixed_indices[rnd] = 1;
-
-    //    i += 1;
-    //}
-
     return 0;
 }
 
@@ -385,7 +359,8 @@ int variable_fixing(
  * Optimizes the problem pointed by lp.
  *
  * env: A pointer to the CPLEX environment.
- * lp: A pointer to a CPLEX problem object.
+ * lp: A pointer to a CPLEX problem object. The problem pointed by lb can be
+ *     both a mixed-integer or a linear problem.
  * objval: A pointer where objective optimal value is to be returned.
  * solstat: A pointer where the status code is to be returned. 
  * x: An array where the values of the variables are to be returned. 
@@ -475,7 +450,8 @@ int optimize_prob(
 
 /**
  * Adds slack variables to the problem pointed by lp. The total number
- * of variables added is given by the 2 * number of columns of the problem.
+ * of variables added is given by the 2 * number of columns of the problem
+ * pointed by lp.
  *
  * env: A pointer to the CPLEX environment.
  * lp: A pointer to a CPLEX problem object.
@@ -513,7 +489,7 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
         goto TERMINATE;
     }
 
-    // Allocate space for the names.
+    // Space for the names.
     for (i = 0; i < ccnt; i++) {
         colnames[i] = (char*) malloc(MAX_SLACK_NAMES_LEN * sizeof(char));
         if (colnames[i] == NULL) {
@@ -754,7 +730,18 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
         goto TERMINATE;
     }
 
-    status = CPXgetcols(env, src, &nzcnt, matbeg, matind, matval, numnz, &surplus, 0, numcols - 1);
+    status = CPXgetcols(
+        env,
+        src,
+        &nzcnt,
+        matbeg,
+        matind,
+        matval,
+        numnz,
+        &surplus,
+        0,
+        numcols - 1
+    );
     if (status) {
         fprintf(stderr, "Failed to copy matbeg""or matind "
                         "or matval coefficients of SRC.\n");
@@ -861,17 +848,22 @@ TERMINATE:
  * Generate the starting point, thus the initial vector for the first
  * FMIP problem to solve.
  *
- * initial_vector: An array where the generate random values are to be returned.
+ * env: A pointer to the CPLEX environment.
+ * fmip: A pointer to a CPLEX problem object.
+ * initial_vector: An array where the generate values are to be returned.
  *                 This array must be of length at least the same as the number
- *                 of columns of MIP.
+ *                 of columns of the starting MIP problem.
  * int_indices: An array where are stored the indices of the integer variables
- *              of lp.
- *              This array must be of length at least num_int_vars.
- * lb: An array where are stored all the lower bounds.
- * ub: An array where are stored all the upper bounds.
+ *              of fmip. This array must be of length at least num_int_vars.
+ * num_int_vars: The length of int_indices.
+ * lb: An array where are stored all the lower bounds. This array must be of 
+ *     length at least as the number of columns of the starting MIP problem.
+ * ub: An array where are stored all the upper bounds. This array must be of 
+ *     length at least as the number of columns of the starting MIP problem.
  * cb: The fixed bound constant.
+ * theta: Minimum percentage of integer variables fixed at every iteration.
  */
-int generate_initial_vector(
+int generate_starting_vector(
     CPXENVptr env,
     CPXLPptr fmip,
     double *initial_vector,
@@ -879,7 +871,6 @@ int generate_initial_vector(
     int num_int_vars,
     double *lb,
     double *ub,
-    int numcols_mip,
     double cb,
     double theta
 ) {
@@ -1446,7 +1437,7 @@ int main(int argc, char *argv[]) {
 
     // Generate the starting point.
     printf("\n### Generate starting point ###\n");
-    status = generate_initial_vector(
+    status = generate_starting_vector(
         env,
         fmip,
         initial_vector,
@@ -1454,7 +1445,6 @@ int main(int argc, char *argv[]) {
         num_int_vars,
         lb_mip,
         ub_mip,
-        numcols_mip,
         BOUND_CONSTANT,
         25
     );
