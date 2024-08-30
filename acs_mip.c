@@ -227,7 +227,6 @@ int restore_bounds(
     CPXLPptr lp,
     double *lb,
     double *ub,
-    int numcols,
     int *int_indices,
     int *fixed_indices,
     int num_int_vars
@@ -349,7 +348,7 @@ int variable_fixing(
     //    char name[MAX_COLNAME_LEN];
     //    if (fixed_indices[j]) {
     //        get_colname(env, lp, int_indices[j], name);
-    //        printf("Var fissata -> %s, valore -> %.2f\n", name, x[int_indices[j]]);
+    //        printf("Var fissata -> %s, valore -> %f\n", name, x[int_indices[j]]);
     //    }
     //}
     //printf("\n");
@@ -458,14 +457,14 @@ int optimize_prob(
     // If verbose is set print solution info.
     if (verbose) {
         printf("Solution status: %d\n", *solstat);
-        printf("Objective value: %.2f\n", *objval);
+        printf("Objective value: %f\n", *objval);
         //printf("Variables values:\n");
         //char colname[MAX_COLNAME_LEN];
         //for (int i = 0; i < numcols; i++) { 
         //    if (get_colname(env, lp, i, colname) == 0) {
-        //        printf("Column = %d,\tValue = %.2f,\tVar name = %s\n", i, x[i], colname);
+        //        printf("Column = %d,\tValue = %f,\tVar name = %s\n", i, x[i], colname);
         //    } else {
-        //        printf("Column = %d,\tValue = %.2f,\tVar name = *error*\n", i, x[i]);
+        //        printf("Column = %d,\tValue = %f,\tVar name = *error*\n", i, x[i]);
         //    }
         //}
     }
@@ -884,27 +883,20 @@ int generate_initial_vector(
     double cb,
     double theta
 ) {
-    // TODO: manca il riordinamento (vedi alg 2 paper)
-    int i, j, beg, prev_beg, cnt, tmp, tot_fixed, upper, lower, status, solstat;
-    double val, objval;
+    int i, j, beg, prev_beg, cnt, tmp, tot_fixed, upper, lower;
+    double rnd, objval, *x_relax;
 
-    char *var_types = NULL, *is_fixed = NULL;
+    int status, solstat, numcols = CPXgetnumcols(env, fmip);;
 
-    int numcols = CPXgetnumcols(env, fmip);
-
-    char lu = 'B';
-
-   // CPXLPptr relax = NULL;
-
-    double *x_relax = NULL;
-
-    char l = 'L', u = 'U', c_type = CPX_CONTINUOUS;
+    char *var_type = NULL;
+    int *is_fixed = NULL;
+    char lu = 'B', l = 'L', u = 'U', c_type = CPX_CONTINUOUS;
 
     int tot_R, tot_O, tot_0;
 
     // Space for variables types of FMIP.
-    var_types = (char*) malloc(num_int_vars * sizeof(char));
-    if (var_types == NULL) {
+    var_type = (char*) malloc(num_int_vars * sizeof(char));
+    if (var_type == NULL) {
         fprintf(stderr, "No memory for var_type.\n");
         goto  TERMINATE;
     }
@@ -912,15 +904,23 @@ int generate_initial_vector(
     // Relax FMIP: set all integer variables to continous.
     for (i = 0; i < num_int_vars; i++) {
         // Save current type.
-        status = CPXgetctype(env, fmip, &var_types[i], int_indices[i], int_indices[i]);
+        status = CPXgetctype(
+            env,
+            fmip,
+            &var_type[i],
+            int_indices[i],
+            int_indices[i]
+        );
         if (status) {
-            fprintf(stderr, "Failed to get variable index %d type.\n", int_indices[i]);
+            fprintf(stderr, "Failed to get variable index %d type.\n",
+                            int_indices[i]);
             goto TERMINATE;
         }
         // Change to continous.
         status = CPXchgctype(env, fmip, 1, &int_indices[i], &c_type);
         if (status) {
-            fprintf(stderr, "Failed to change variable index %d type.\n", int_indices[i]);
+            fprintf(stderr, "Failed to change variable index %d type.\n", 
+                             int_indices[i]);
             goto TERMINATE;
         }
     }
@@ -934,14 +934,14 @@ int generate_initial_vector(
 
     // Space for the FMIP relax solutions.
     x_relax = (double*) malloc(numcols * sizeof(double));
-    is_fixed = (char*) malloc(num_int_vars * sizeof(int));
+    is_fixed = (int*) malloc(num_int_vars * sizeof(int));
     if (x_relax == NULL || is_fixed == NULL) {
         fprintf(stderr, "No memory for x_relax and is_fixed (FMIP relax).\n");
         goto  TERMINATE;
     }
 
     // Init is_fixed with zeros (no value fixed).
-    bzero(is_fixed, num_int_vars * sizeof(char));
+    bzero(is_fixed, num_int_vars * sizeof(int));
 
     // Generate starting vector algorithm.
     prev_beg = beg = tot_fixed = 0;
@@ -959,15 +959,15 @@ int generate_initial_vector(
             // Generate random value.
             upper = (int) min(ub[int_indices[beg]], cb);
             lower = (int) max(lb[int_indices[beg]], -cb);
-            val = (int) (rand() % (upper - lower + 1)) + lower;
-            //printf("Col: %d, upper: %d, lower: %d, val: %.2f\n", int_indices[beg], upper, lower, val);
+            rnd = (int) (rand() % (upper - lower + 1)) + lower;
+            //printf("Col: %d, upper: %d, lower: %d, val: %f\n", int_indices[beg], upper, lower, val);
 
             // Save the value.
-            initial_vector[int_indices[beg]] = val;
+            initial_vector[int_indices[beg]] = rnd;
             is_fixed[beg] = 'R'; // Random fix.
 
             // Fix the variable to the generated value in FMIP relax.
-            status = CPXchgbds(env, fmip, 1, &int_indices[beg], &lu, &val);
+            status = CPXchgbds(env, fmip, 1, &int_indices[beg], &lu, &rnd);
             if (status) {
                 fprintf(stderr, 
                         "Failed to fix variable %d.\n", int_indices[beg]);
@@ -985,14 +985,23 @@ int generate_initial_vector(
                 else if (is_fixed[i] == 'O') tot_O += 1;
                 else if (!is_fixed[i]) tot_0 += 1;
             }
-            printf("Fixed values situation: "
-                   "tot 'R' -> %d, 'O' -> %d, 0 -> %d\n", tot_R, tot_O, tot_0);
+            printf("Fixed values situation: Random: %d, Optimize: %d, "
+                   "Not fixed -> %d\n", tot_R, tot_O, tot_0);
             break;
         }
 
         // Optimize FMIP relax.
         printf("Optimize FMIP relaxation . . . - Iteration %d\n", j);
-        status = optimize_prob(env, fmip, &objval, &solstat, x_relax, 0, numcols - 1, 1);
+        status = optimize_prob(
+            env,
+            fmip,
+            &objval,
+            &solstat,
+            x_relax,
+            0,
+            numcols - 1,
+            1
+        );
         if (status) {
             fprintf(stderr, "Error during FMIP relax optimization.\n");
         } 
@@ -1004,30 +1013,27 @@ int generate_initial_vector(
                 printf("Found a feasibile solution for FMIP relax.\n");
                 // Fix extra values: take them from relaxation solution.
                 for (i = beg; i < num_int_vars; i++) {
-                    // TODO: Confronto tra variabili double va gestito con un range.
-                    //if (is_fixed[i] == 'I') { // Round fractional to nearest int.
-                    //    is_fixed[i] = 'O'; // Optimize fix.
-                    //    if (rand() % 2) {
-                    //        initial_vector[int_indices[i]] = ceil(x_relax[int_indices[i]]);
-                    //        //printf("Column %d rounded up.\n", int_indices[i]);
-                    //    } else {
-                    //        initial_vector[int_indices[i]] = floor(x_relax[int_indices[i]]);
-                    //        //printf("Column %d rounded down .\n", int_indices[i]);
-                    //    }
-                    //}
                     if (!is_fixed[i] &&                       // If is int.
                         round(x_relax[int_indices[i]]) == 
                         x_relax[int_indices[i]]) {
-                        //printf("Column %d -> integer, value -> %.2f.\n", int_indices[i], x_relax[int_indices[i]]);
+                        //printf("Column %d -> integer, value -> %f.\n", int_indices[i], x_relax[int_indices[i]]);
                         initial_vector[int_indices[i]] = x_relax[int_indices[i]];
                         is_fixed[i] = 'O'; // Optimize fix.
                         tot_fixed += 1; // Update total fixed counter.
 
                         // Fix the variable in FMIP relax.
-                        status = CPXchgbds(env, fmip, 1, &int_indices[i], &lu, &x_relax[int_indices[i]]);
+                        status = CPXchgbds(
+                            env,
+                            fmip,
+                            1,
+                            &int_indices[i],
+                            &lu,
+                            &x_relax[int_indices[i]]
+                        );
                         if (status) {
                             fprintf(stderr, 
-                                    "Failed to fix variable with index %d.\n", int_indices[i]);
+                                    "Failed to fix variable "
+                                    "with index %d.\n", int_indices[i]);
                             goto TERMINATE;
                         }
                     }
@@ -1035,42 +1041,6 @@ int generate_initial_vector(
                 break;
             default:
                 fprintf(stderr, "Failed to optimize FMIP relax.\n");
-                // Restore bounds of the latest fixed variables.
-                //for (i = prev_beg; i < beg; i++) {
-                //    if (is_fixed[i] != 'R') {
-                //        continue;
-                //    }
-                //    is_fixed[i] = 'I';
-                //    //printf("Column %d restore bounds.\n", int_indices[i]);
-                //    // Restore lower bounds.
-                //    status = CPXchgbds(
-                //        env,
-                //        fmip,
-                //        1,
-                //        &int_indices[i],
-                //        &l,
-                //        &lb[int_indices[i]]
-                //    );
-                //    if (status) {
-                //        fprintf(stderr, "Failed to reset lower bound "
-                //                        "of variable %d.\n", int_indices[i]);
-                //        goto TERMINATE;
-                //    }
-                //    // Reset upper bounds.
-                //    status = CPXchgbds(
-                //        env,
-                //        fmip,
-                //        1,
-                //        &int_indices[i],
-                //        &u,
-                //        &ub[int_indices[i]]
-                //    );
-                //    if (status) {
-                //        fprintf(stderr, "Failed to reset upper bound "
-                //                        "of variable %d.\n", int_indices[i]);
-                //        goto TERMINATE;
-                //    }
-                //}
         }
 
         for (tot_R = 0, tot_O = 0, tot_0 = 0, i = 0; i < num_int_vars; i++) {
@@ -1078,44 +1048,9 @@ int generate_initial_vector(
             else if (is_fixed[i] == 'O') tot_O += 1;
             else if (!is_fixed[i]) tot_0 += 1;
         }
-        printf("Fixed values situation: "
-               "tot 'R' -> %d, 'O' -> %d, 0 -> %d\n\n", tot_R, tot_O, tot_0);
+        printf("Fixed values situation: Random: %d, Optimize: %d, "
+               "Not fixed -> %d\n", tot_R, tot_O, tot_0);
     }
-
-    // If some of the values are still marked with 'I'.
-    //if (tot_I != 0) {
-    //    printf("\nFix the remaning %d values.\n\n", tot_I);
-
-    //    // Optimize FMIP relax.
-    //    status = optimize_prob(env, fmip, &objval, &solstat, x_relax, 0, numcols - 1, 1);
-    //    if (status) {
-    //        fprintf(stderr, "Failed to optimize FMIP relax\n"
-    //                        "Solution status: %d\n", solstat);
-    //    } else if (solstat == CPX_STAT_OPTIMAL || solstat == CPX_STAT_FEASIBLE) {
-    //        //printf("\n");
-    //        // Round fractional to nearest int.
-    //        for (i = 0; i < num_int_vars; i++) {
-    //            if (is_fixed[i] == 'I') {
-    //                is_fixed[i] = 'O'; // Optimize fix.
-    //                if (rand() % 2) {
-    //                    initial_vector[int_indices[i]] = ceil(x_relax[int_indices[i]]);
-    //                    //printf("Column %d rounded up, value -> %.2f, original -> %.2f.\n", int_indices[i], initial_vector[int_indices[i]], x_relax[int_indices[i]]);
-    //                } else {
-    //                    initial_vector[int_indices[i]] = floor(x_relax[int_indices[i]]);
-    //                    //printf("Column %d rounded down, value -> %.2f, original -> %.2f.\n", int_indices[i], initial_vector[int_indices[i]], x_relax[int_indices[i]]);
-    //                }
-    //            }
-    //        }
-    //    }
-
-    //    for (tot_I = 0, tot_R = 0, tot_O = 0, tot_0 = 0, i = 0; i < num_int_vars; i++) {
-    //        if (is_fixed[i] == 'I') tot_I += 1;
-    //        else if (is_fixed[i] == 'R') tot_R += 1;
-    //        else if (is_fixed[i] == 'O') tot_O += 1;
-    //        else if (!is_fixed[i]) tot_0 += 1;
-    //    }
-    //    printf("\nFixed values situation: tot 'I' -> %d, 'R' -> %d, 'O' -> %d, 0 -> %d\n", tot_I, tot_R, tot_O, tot_0);
-    //}
 
     // Set FMIP back to mixed-integer.
     status = CPXchgprobtype(env, fmip, CPXPROB_MILP);
@@ -1126,65 +1061,35 @@ int generate_initial_vector(
 
     // Restore FMIP variables types.
     for (i = 0; i < num_int_vars; i++) {
-        status = CPXchgctype(env, fmip, 1, &int_indices[i], &var_types[i]);
+        status = CPXchgctype(env, fmip, 1, &int_indices[i], &var_type[i]);
         if (status) {
-            fprintf(stderr, "Failed to change variable %d type.\n", int_indices[i]);
+            fprintf(stderr, "Failed to change variable %d type.\n", 
+                            int_indices[i]);
             goto TERMINATE;
         }
     }
     
     // Restore FMIP bounds.
-    for (i = 0; i < num_int_vars; i++) {
-        // Reset lower bounds.
-        status = CPXchgbds(
-            env,
-            fmip,
-            1,
-            &int_indices[i],
-            &l,
-            &lb[int_indices[i]]
-        );
-        if (status) {
-            fprintf(stderr, "Failed to reset lower bound "
-                            "of variable %d.\n", int_indices[i]);
-            goto TERMINATE;
-        }
-        // Reset upper bounds.
-        status = CPXchgbds(
-            env,
-            fmip,
-            1,
-            &int_indices[i],
-            &u,
-            &ub[int_indices[i]]
-        );
-        if (status) {
-            fprintf(stderr, "Failed to reset upper bound "
-                            "of variable %d.\n", int_indices[i]);
-            goto TERMINATE;
-        }
+    status = restore_bounds(
+        env,
+        fmip,
+        lb,
+        ub,
+        int_indices,
+        is_fixed,
+        num_int_vars
+    );
+    if (status) {
+        fprintf(stderr, "Failed to restore FMIP bounds.\n");
     }
 
 TERMINATE:
 
     free_and_null((char**) &x_relax);
-    free_and_null(&is_fixed);
-    free_and_null(&var_types);
+    free_and_null((char**) &is_fixed);
+    free_and_null(&var_type);
 
     return status;
-
-    // Old version.
-    //int i, upper, lower, val;
-    //
-    ////printf("\n");
-    //for (i = 0; i < num_int_vars; i++) {
-    //    upper = (int) min(ub[int_indices[i]], cb);
-    //    lower = (int) max(lb[int_indices[i]], -cb);
-    //    val = (int) (rand() % (upper - lower + 1)) + lower;
-    //    //printf("Col: %d, upper: %d, lower: %d, val: %d\n", int_indices[i], upper, lower, val);
-    //    // (rand() % (upper – lower + 1)) + lower 
-    //    initial_vector[int_indices[i]] = val;
-    //}
 }
 
 
@@ -1397,7 +1302,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Set seed.
-    srand(14081103);
+    srand(26081255);
 
     out_csv = fopen(out_fn, "w+");
     if (out_csv == NULL) {
@@ -1425,11 +1330,11 @@ int main(int argc, char *argv[]) {
     }
 
     // Set node limit.
-    status = CPXsetintparam(env, CPX_PARAM_NODELIM, NODE_LIMIT);
-    if (status) {
-        fprintf(stderr, "Failure to set node limit, error %d\n", status);
-        goto TERMINATE;
-    }
+    //status = CPXsetintparam(env, CPX_PARAM_NODELIM, NODE_LIMIT);
+    //if (status) {
+    //    fprintf(stderr, "Failure to set node limit, error %d\n", status);
+    //    goto TERMINATE;
+    //}
 
     // Set time limit.
     status = CPXsetdblparam(env, CPXPARAM_TimeLimit, TIME_LIMIT);
@@ -1626,7 +1531,6 @@ int main(int argc, char *argv[]) {
                 fmip,
                 lb_mip,
                 ub_mip,
-                numcols_mip,
                 int_indices,
                 fixed_indices,
                 num_int_vars
@@ -1645,7 +1549,7 @@ int main(int argc, char *argv[]) {
                     printf("Found a feasibile solution for FMIP (Optimal tollerance).\n");
                     break;
                 case CPXMIP_NODE_LIM_FEAS:
-                    fprintf(out_csv, "fmip,%.2f\n", objval_fmip); // Save to output.
+                    fprintf(out_csv, "fmip,%f\n", objval_fmip); // Save to output.
                     break;
                 case CPXMIP_TIME_LIM_FEAS:
                     printf("Found a feasibile solution for FMIP (Time limit).\n");
@@ -1733,7 +1637,6 @@ int main(int argc, char *argv[]) {
                 omip,
                 lb_mip,
                 ub_mip,
-                numcols_mip,
                 int_indices,
                 fixed_indices,
                 num_int_vars
@@ -1744,7 +1647,7 @@ int main(int argc, char *argv[]) {
             }
 
             slack_sum = sum(x_omip, numcols_mip, numcols_submip - 1);
-            printf("Slack sum: %.2f\n", slack_sum);
+            printf("Slack sum: %f\n", slack_sum);
 
             // If the OMIP's solution is feasibile.
             switch (solstat_omip) {
@@ -1765,8 +1668,8 @@ int main(int argc, char *argv[]) {
             }
 
             // Save results to the csv output file.
-            fprintf(out_csv, "fmip,%.2f\n", objval_fmip);
-            fprintf(out_csv, "omip,%.2f\n", objval_omip);
+            fprintf(out_csv, "fmip,%f\n", objval_fmip);
+            fprintf(out_csv, "omip,%f\n", objval_omip);
 
             // Check sum of slack variables.
             if (slack_sum == 0) {
