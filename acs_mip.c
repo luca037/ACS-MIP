@@ -33,6 +33,9 @@
  * found a feasibile solution for FMIP and then a feasibile solution for OMIP. */
 #define MAX_ITR 15
 
+/* Percentage of integer variables that are fixed in both FMIP and OMIP. */
+#define FIXED_VAR_PERCENT 50
+
 /* It's used for initializing the starting vector. The value of the variable
  * is raondomly choosen from the range
  *      [max(lb, BOUND_CONSTANT), min(ub, BOUND_CONSTANT)]
@@ -1474,7 +1477,7 @@ int main(int argc, char *argv[]) {
                     is_fixed,
                     num_int_vars,
                     starting_vector,
-                    50
+                    FIXED_VAR_PERCENT
                 );
             } else { // Otherwise use OMIP's solution.
                 status = variable_fixing(
@@ -1484,7 +1487,7 @@ int main(int argc, char *argv[]) {
                     is_fixed,
                     num_int_vars,
                     x_omip,
-                    50
+                    FIXED_VAR_PERCENT
                 );
             }
             if (status) {
@@ -1592,7 +1595,7 @@ int main(int argc, char *argv[]) {
                 is_fixed,
                 num_int_vars,
                 x_fmip,
-                50
+                FIXED_VAR_PERCENT
             );
             if (status) {
                 fprintf(stderr, "Failed to fix variables of OMIP.\n");
@@ -1641,9 +1644,6 @@ int main(int argc, char *argv[]) {
                 goto TERMINATE;
             }
 
-            slack_sum = sum(x_omip, numcols_mip, numcols_submip - 1);
-            printf("Slack sum: %f\n", slack_sum);
-
             // If the OMIP's solution is feasibile.
             switch (solstat_omip) {
                 case CPXMIP_OPTIMAL:
@@ -1662,11 +1662,9 @@ int main(int argc, char *argv[]) {
                     continue; // Try to solve another OMIP.
             }
 
-            // Save results to the csv output file.
-            fprintf(out_csv, "fmip,%f\n", objval_fmip);
-            fprintf(out_csv, "omip,%f\n", objval_omip);
-
             // Check sum of slack variables.
+            slack_sum = sum(x_omip, numcols_mip, numcols_submip - 1);
+            printf("Slack sum: %f\n", slack_sum);
             if (slack_sum == 0) {
                 printf("Found a feasibile solution for MIP.\n");
                 goto TERMINATE;
