@@ -212,10 +212,10 @@ int init_mip_bds_and_indices(
  * numcols: The length of the arrays lb and up.
  * int_indices: An array where are stored the indices of the integer variables
  *              of lp. This array must be of length at least num_int_vars.
- * fixed_indices: An array that tells if a variable was fixed.
- *                A variable with index int_indices[i] was fixed if and only if 
- *                fixed_indices[i] is a nonzero value.
- *                This array must be of length at least num_int_vars.
+ * is_fixed: An array that tells if a variable was fixed.
+ *           A variable with index int_indices[i] was fixed if and only if 
+ *           fixed_indices[i] is a nonzero value.
+ *           This array must be of length at least num_int_vars.
  * num_int_vars: The length of the arrays int_indices and fixed_indices.
  *
  * return: Returns 0 if successful and nonzero if an error occurs.
@@ -226,14 +226,14 @@ int restore_bounds(
     double *lb,
     double *ub,
     int *int_indices,
-    int *fixed_indices,
+    int *is_fixed,
     int num_int_vars
 ) {
     int i, status;
     char lower = 'L', upper = 'U';
 
     for (i = 0; i < num_int_vars; i++) {
-        if (fixed_indices[i]) { // Se è stata fissata.
+        if (is_fixed[i]) {
             // Reset lower bounds.
             status = CPXchgbds(
                 env,
@@ -290,10 +290,10 @@ int restore_bounds(
  * lp: A pointer to a CPLEX problem object.
  * int_indices: An array where are stored the indices of the integer variables
  *              of lp. This array must be of length at least num_int_vars.
- * fixed_indices: An array that tells if a variable was fixed.
- *                A variable with index int_indices[i] was fixed if and only if 
- *                fixed_indices[i] is a nonzero value.
- *                This array must be of length at least num_int_vars.
+ * is_fixed: An array that tells if a variable was fixed.
+ *           A variable with index int_indices[i] was fixed if and only if 
+ *           fixed_indices[i] is a nonzero value. This array must be of length
+ *           at least num_int_vars.
  * num_int_vars: The length of the arrays int_indices and fixed_indices.
  * x: An array where are stored the values to use for fixing the variables.
  *    This array must be of length at least the ammount of columns of the
@@ -307,7 +307,7 @@ int variable_fixing(
     CPXENVptr env,
     CPXLPptr lp,
     int *int_indices,
-    int *fixed_indices,
+    int *is_fixed,
     int num_int_vars,
     double *x,
     int percentage
@@ -337,7 +337,7 @@ int variable_fixing(
                     "Failed to fix variable with index %d.\n", int_indices[rnd]);
             return status;
         }
-        fixed_indices[tmp] = 1;
+        is_fixed[tmp] = 1;
     }
 
     // Stampa variabili fissate.
@@ -1256,19 +1256,24 @@ int main(int argc, char *argv[]) {
     CPXENVptr env = NULL;
     CPXLPptr mip = NULL, fmip = NULL, omip = NULL;
 
-    int numcols_mip, numcols_submip, solstat_fmip, solstat_omip;
-    double objval_fmip, objval_omip; // Objective values.
-    double *x_fmip = NULL, *x_omip = NULL; // Variabiles values.
+    int numcols_mip, numcols_submip;       // Number of columns.
+    int solstat_fmip, solstat_omip;        // Solution status.
+    double objval_fmip, objval_omip;       // Objective values.
+    double *x_fmip = NULL, *x_omip = NULL; // Variables values.
 
     int *int_indices = NULL; // Indices of the integer variables of MIP.
-    int *fixed_indices = NULL; // Indices of the fixed variables of MIP.
-    int num_int_vars; // Ammount of integer variables of MIP.
-    double *initial_vector = NULL; // Used for the first variable fixing.
-    double *lb_mip = NULL, *ub_mip = NULL; // Used to restore the bounds.
+    int *is_fixed = NULL;    // Manages fixed variables.
+    int num_int_vars;        // Ammount of integer variables of MIP.
+
+    double *starting_vector = NULL; // Used for the first variable fixing.
+
+    double *lb_mip = NULL; // Lower bounds of MIP.
+    double *ub_mip = NULL; // Upper bounds of MIP.
+
     double slack_sum; // For OMIP.
 
     char *in_fn = NULL, *out_fn = NULL; // Input and output file names.
-    FILE *out_csv = NULL;
+    FILE *out_csv = NULL;               // Csv output file.
 
     int i, j, tmp, cnt, opt, status;
 
@@ -1385,13 +1390,13 @@ int main(int argc, char *argv[]) {
 
     // Init: int_indices; fixed_indices; lb_mip; ub_mip.
     int_indices = (int*) malloc(num_int_vars * sizeof(int));
-    fixed_indices = (int*) malloc(num_int_vars * sizeof(int));
+    is_fixed = (int*) malloc(num_int_vars * sizeof(int));
 
     lb_mip = (double*) malloc(numcols_mip * sizeof(double));
     ub_mip = (double*) malloc(numcols_mip * sizeof(double));
 
     if (int_indices == NULL ||
-        fixed_indices == NULL ||
+        is_fixed == NULL ||
         lb_mip == NULL ||
         ub_mip == NULL) {
         fprintf(stderr, "No memory for int_indices, fixed_indices,"
@@ -1414,8 +1419,8 @@ int main(int argc, char *argv[]) {
     }
 
     // Allocate space for the initial vector (the starting point).
-    initial_vector = (double*) malloc(numcols_mip * sizeof(double));
-    if (initial_vector == NULL) {
+    starting_vector = (double*) malloc(numcols_mip * sizeof(double));
+    if (starting_vector == NULL) {
         fprintf(stderr, "No memory for initial_vector.\n");
         goto TERMINATE;
     }
@@ -1440,7 +1445,7 @@ int main(int argc, char *argv[]) {
     status = generate_starting_vector(
         env,
         fmip,
-        initial_vector,
+        starting_vector,
         int_indices,
         num_int_vars,
         lb_mip,
@@ -1460,15 +1465,15 @@ int main(int argc, char *argv[]) {
             // Variable fixing on FMIP.
             printf("\n### Variable fixing on FMIP "
                    "- Attempt %d - Iteration %d ###\n", i, cnt);
-            bzero(fixed_indices, num_int_vars * sizeof(int));
+            bzero(is_fixed, num_int_vars * sizeof(int));
             if (cnt == 0) { // Use initial vector only in the first iteration.
                 status = variable_fixing(
                     env,
                     fmip,
                     int_indices,
-                    fixed_indices,
+                    is_fixed,
                     num_int_vars,
-                    initial_vector,
+                    starting_vector,
                     50
                 );
             } else { // Otherwise use OMIP's solution.
@@ -1476,7 +1481,7 @@ int main(int argc, char *argv[]) {
                     env,
                     fmip,
                     int_indices,
-                    fixed_indices,
+                    is_fixed,
                     num_int_vars,
                     x_omip,
                     50
@@ -1522,7 +1527,7 @@ int main(int argc, char *argv[]) {
                 lb_mip,
                 ub_mip,
                 int_indices,
-                fixed_indices,
+                is_fixed,
                 num_int_vars
             );
             if (status) {
@@ -1579,12 +1584,12 @@ int main(int argc, char *argv[]) {
             // Variable fixing on OMIP.
             printf("\n### Variable fixing on OMIP "
                    "- Attempt %d - Iteration %d ###\n", i, cnt);
-            bzero(fixed_indices, num_int_vars * sizeof(int));
+            bzero(is_fixed, num_int_vars * sizeof(int));
             status = variable_fixing(
                 env,
                 omip,
                 int_indices,
-                fixed_indices,
+                is_fixed,
                 num_int_vars,
                 x_fmip,
                 50
@@ -1628,7 +1633,7 @@ int main(int argc, char *argv[]) {
                 lb_mip,
                 ub_mip,
                 int_indices,
-                fixed_indices,
+                is_fixed,
                 num_int_vars
             );
             if (status) {
@@ -1688,8 +1693,8 @@ TERMINATE:
     free_and_null((char**) &x_fmip);
     free_and_null((char**) &x_omip);
     free_and_null((char**) &int_indices);
-    free_and_null((char**) &fixed_indices);
-    free_and_null((char**) &initial_vector);
+    free_and_null((char**) &is_fixed);
+    free_and_null((char**) &starting_vector);
     free_and_null((char**) &lb_mip);
     free_and_null((char**) &ub_mip);
 
