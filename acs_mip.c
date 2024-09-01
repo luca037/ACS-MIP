@@ -21,17 +21,17 @@
 
 /* Maximum number of attempts to solve FMIP/OMIP that has no solution due to
  * infeasability. */
-#define MAX_ATTEMPTS 1
+#define MAX_ATTEMPTS 2
 
 /* Maximum number of nodes explored during optimization. */
-#define NODE_LIMIT 1000
+#define NODE_LIMIT 1000 /* Not set */
 
 /* Optimizer time limit (seconds). */
-#define TIME_LIMIT 60
+#define TIME_LIMIT 60 /* Not set */
 
 /* Maximum number of iteration. An iteration is complete when the solver has 
  * found a feasibile solution for FMIP and then a feasibile solution for OMIP. */
-#define MAX_ITR 15
+#define MAX_ITR 10
 
 /* Percentage of integer variables that are fixed in both FMIP and OMIP. */
 #define FIXED_VAR_PERCENT 50
@@ -49,11 +49,11 @@
  * progname: The executable's name.
  */
 void print_usage(char *progname) {
-   fprintf (stderr, "Usage: %s -i <intput> -o <output>\n"
+   fprintf (stderr, "Usage: %s -i <intput> -o <output> -s <seed>\n"
                     "   input: is a file with extension \n"
                     "      MPS, SAV, or LP (lower case is allowed)\n"
                     "   output: is a file with extension csv\n"
-                    "  This program uses the CPLEX MIP optimizer.\n"
+                    "   seed: any integer number\n"
                     " Exiting...\n", progname
    );
 }
@@ -100,12 +100,14 @@ double max(double a, double b) {
     return (a >= b)? a : b;
 }
 
+
 /**
  * Returns the minimum between a and b.
  */
 double min(double a, double b) {
     return (a <= b)? a : b;
 }
+
 
 /**
  * Accesses column's name.
@@ -1259,9 +1261,11 @@ int main(int argc, char *argv[]) {
     CPXENVptr env = NULL;
     CPXLPptr mip = NULL, fmip = NULL, omip = NULL;
 
-    int numcols_mip, numcols_submip;       // Number of columns.
-    int solstat_fmip, solstat_omip;        // Solution status.
-    double objval_fmip, objval_omip;       // Objective values.
+    int numcols_mip, numcols_submip; // Number of columns.
+    int solstat_fmip, solstat_omip;  // Solution status.
+    double objval_fmip, objval_omip; // Objective values.
+    int numnz_mip;                   // Number of nonzero elements.
+
     double *x_fmip = NULL, *x_omip = NULL; // Variables values.
 
     int *int_indices = NULL; // Indices of the integer variables of MIP.
@@ -1277,14 +1281,15 @@ int main(int argc, char *argv[]) {
 
     char *in_fn = NULL, *out_fn = NULL; // Input and output file names.
     FILE *out_csv = NULL;               // Csv output file.
+    int seed = 0;
 
     int i, j, tmp, cnt, opt, status;
 
-    double dettime_lim;
-    int numnz_mip; // Number of nonzero elements 
+    int quality_loop = 0;
+    double dettime_lim; // Deterministic time parameter.
 
     // Check command line options.
-    while ((opt = getopt(argc, argv, "i:o:")) != -1) {
+    while ((opt = getopt(argc, argv, "i:o:s:")) != -1) {
         switch (opt) {
             case 'i':
                 in_fn = optarg;
@@ -1292,19 +1297,22 @@ int main(int argc, char *argv[]) {
             case 'o':
                 out_fn = optarg;
                 break;
+            case 's':
+                seed = atoi(optarg);
+                break;
             default:
                 print_usage(argv[0]);
                 return 1;
         }
     }
 
-    if (in_fn == NULL || out_fn == NULL) {
+    if (in_fn == NULL || out_fn == NULL || seed == 0) {
         print_usage(argv[0]);
         return 1;
     }
 
     // Set seed.
-    srand(26081255);
+    srand(seed);
 
     out_csv = fopen(out_fn, "w+");
     if (out_csv == NULL) {
@@ -1409,8 +1417,6 @@ int main(int argc, char *argv[]) {
             goto TERMINATE;
         }
 
-        // TODO: Da capire cosa sono le semi-integer variables e se devo
-        //       considerarle.
         if (type == CPX_BINARY || type == CPX_INTEGER) {
             num_int_vars += 1;
         }
@@ -1468,7 +1474,27 @@ int main(int argc, char *argv[]) {
         goto TERMINATE;
     }
 
-    // Generate the starting point.
+    // Calculate theta.
+    int a[] = {1, 5, 10, 20, 50, 100};
+    double diff, t, theta;
+    theta = (double) numnz_mip * 100 / 2000000;
+
+    if (theta > 70) {
+        theta = 100;
+    } else {
+        t = a[0];
+        diff = fabs(theta - a[0]);
+        for (i = 1; i < 6; i++) {
+            if (fabs(theta - a[i]) < diff) {
+                diff = fabs(theta - a[i]);
+                t = a[i];
+            }
+        }
+        theta = t;
+    }
+    printf("\nTheta: %f\n", theta);
+
+    // Generte the starting point.
     printf("\n### Generate starting point ###\n");
     status = generate_starting_vector(
         env,
@@ -1479,7 +1505,7 @@ int main(int argc, char *argv[]) {
         lb_mip,
         ub_mip,
         BOUND_CONSTANT,
-        25
+        theta
     );
     if (status) {
         fprintf(stderr, "Failed to generate initial vector.\n");
@@ -1575,7 +1601,7 @@ int main(int argc, char *argv[]) {
                     printf("Found a feasibile solution for FMIP (Optimal tollerance).\n");
                     break;
                 case CPXMIP_NODE_LIM_FEAS:
-                    fprintf(out_csv, "fmip,%f\n", objval_fmip); // Save to output.
+                    printf("Found a feasibile solution for FMIP (Node limit).\n");
                     break;
                 case CPXMIP_TIME_LIM_FEAS:
                     printf("Found a feasibile solution for FMIP (Time limit).\n");
@@ -1704,16 +1730,118 @@ int main(int argc, char *argv[]) {
             printf("Slack sum: %f\n", slack_sum);
             if (slack_sum == 0) {
                 printf("Found a feasibile solution for MIP.\n");
-                goto TERMINATE;
-            } 
+                quality_loop = 1; // Quit ACS.
+
+                // Save results to the csv output file.
+                fprintf(out_csv, "fmip,%f\nomip,%f\n", slack_sum, objval_omip);
+            } else {
+                // Save results to the csv output file.
+                fprintf(out_csv, "fmip,%f\nomip,%f\n", objval_fmip, objval_omip);
+            }
 
             break; // Only if OMIP's solution is feasibile.
         }
 
-        // If no OMIP has been resolved.
-        if (MAX_ATTEMPTS == i) {
+        if (MAX_ATTEMPTS == i) { // If no OMIP has been resolved.
             printf("All OMIPs was infeasibile.\n");
             break;
+        } else if (quality_loop) { // If a (MIP) feasibile solution was found.
+            break;
+        }
+    }
+
+    // Improve the quality of the solution.
+    if (quality_loop) {
+        // Update the slack constraint of OMIP, if necessary.
+        // (slack_sum could be 0 while objval_fmip could be grater than 0)
+        if (slack_sum != objval_fmip) {
+            tmp = CPXgetnumrows(env, omip) - 1;
+            status = CPXchgrhs(env, omip, 1, &tmp, &slack_sum);
+            if (status) {
+                fprintf(stderr, "Failed to update rhs value (slack) of OMIP.\n");
+                goto TERMINATE;
+            }
+        }
+
+        printf("\n### Improve feasibile solution quality ###");
+        int obj_sen = CPXgetobjsen(env, omip);
+        double prev_objval = objval_omip;
+        for (i = 0; ; i++) {
+            printf("\nIteration: %d\n", i);
+
+            bzero(is_fixed, num_int_vars * sizeof(int));
+
+            status = variable_fixing(
+                env,
+                omip,
+                int_indices,
+                is_fixed,
+                num_int_vars,
+                x_omip,
+                FIXED_VAR_PERCENT
+            );
+            if (status) {
+                fprintf(stderr, "Failed to fix variables of OMIP.\n");
+                goto TERMINATE;
+            }
+
+            // Optimize OMIP.
+            optimize_prob(
+                env,
+                omip,
+                &objval_omip,
+                &solstat_omip,
+                x_omip,
+                0,
+                numcols_submip - 1,
+                1
+            );
+
+            // Restore bounds of OMIP.
+            status = restore_bounds(
+                env,
+                omip,
+                lb_mip,
+                ub_mip,
+                int_indices,
+                is_fixed,
+                num_int_vars
+            );
+            if (status) {
+                fprintf (stderr, "Failed to restore OMIP bounds.\n");
+                goto TERMINATE;
+            }
+
+            // If the OMIP's solution is feasibile.
+            switch (solstat_omip) {
+                case CPXMIP_OPTIMAL:
+                    printf("Found a feasibile solution for OMIP (Optimal).\n");
+                    break;
+                case CPXMIP_OPTIMAL_TOL:
+                    printf("Found a feasibile solution for OMIP (Optimal tollerance).\n");
+                    break;
+                case CPXMIP_NODE_LIM_FEAS:
+                    printf("Found a feasibile solution for OMIP (Node limit).\n");
+                    break;
+                case CPXMIP_TIME_LIM_FEAS:
+                    printf("Found a feasibile solution for OMIP (Time limit).\n");
+                    break;
+                case CPXMIP_DETTIME_LIM_FEAS:
+                    printf("Found a feasibile solution for OMIP (DetTime limit).\n");
+                    break;
+                default:
+                    goto TERMINATE; // Quit.
+            }
+
+            // Check if the new solution is better.
+            if ((obj_sen == CPX_MIN && objval_omip < prev_objval) ||
+                (obj_sen == CPX_MAX && objval_omip > prev_objval)) {
+                prev_objval = objval_omip;
+            } else { // Otherwise save the solution and quit.
+                objval_omip = prev_objval;
+                fprintf(out_csv, "quality,%f\n", objval_omip);
+                break;
+            }
         }
     }
 
