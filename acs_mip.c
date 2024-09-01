@@ -980,7 +980,7 @@ int generate_starting_vector(
                 else if (!is_fixed[i]) tot_0 += 1;
             }
             printf("Fixed values situation: Random: %d, Optimize: %d, "
-                   "Not fixed -> %d\n", tot_R, tot_O, tot_0);
+                   "Not fixed: %d\n", tot_R, tot_O, tot_0);
             break;
         }
 
@@ -1043,7 +1043,7 @@ int generate_starting_vector(
             else if (!is_fixed[i]) tot_0 += 1;
         }
         printf("Fixed values situation: Random: %d, Optimize: %d, "
-               "Not fixed -> %d\n", tot_R, tot_O, tot_0);
+               "Not fixed: %d\n", tot_R, tot_O, tot_0);
     }
 
     // Set FMIP back to mixed-integer.
@@ -1280,6 +1280,9 @@ int main(int argc, char *argv[]) {
 
     int i, j, tmp, cnt, opt, status;
 
+    double dettime_lim;
+    int numnz_mip; // Number of nonzero elements 
+
     // Check command line options.
     while ((opt = getopt(argc, argv, "i:o:")) != -1) {
         switch (opt) {
@@ -1336,11 +1339,11 @@ int main(int argc, char *argv[]) {
     //}
 
     // Set time limit.
-    status = CPXsetdblparam(env, CPXPARAM_TimeLimit, TIME_LIMIT);
-    if (status) {
-        fprintf(stderr, "Failure to set time limit, error %d\n", status);
-        goto TERMINATE;
-    }
+    //status = CPXsetdblparam(env, CPXPARAM_TimeLimit, TIME_LIMIT);
+    //if (status) {
+    //    fprintf(stderr, "Failure to set time limit, error %d\n", status);
+    //    goto TERMINATE;
+    //}
 
     // Create MIP from the input file.
     printf("\nCreating MIP.\n");
@@ -1354,6 +1357,28 @@ int main(int argc, char *argv[]) {
     status = CPXreadcopyprob(env, mip, in_fn, NULL);
     if (status) {
         fprintf(stderr, "Failed to read and copy the problem data (MIP).\n");
+        goto TERMINATE;
+    }
+
+    // Get number of nonzero elements in MIP.
+    numnz_mip = CPXgetnumnz(env, mip);
+    if (!numnz_mip) {
+        fprintf(stderr, "Failed to read number of nonzero elements of MIP.\n");
+        goto TERMINATE;
+    }
+
+    // Calculate deterministic time limit and set the parameter.
+    dettime_lim = (double) numnz_mip / 100.0;
+    if (dettime_lim < 1000) {
+        dettime_lim = 1000;
+    } else if (dettime_lim > 100000) {
+        dettime_lim = 100000;
+    }
+
+    status = CPXsetdblparam(env, CPXPARAM_DetTimeLimit, dettime_lim);
+    if (status) {
+        fprintf(stderr, 
+                "Failure to set deterministic time limit, error %d\n", status);
         goto TERMINATE;
     }
 
@@ -1515,6 +1540,9 @@ int main(int argc, char *argv[]) {
                     case CPXMIP_TIME_LIM_INFEAS:
                         printf("FMIP is infeasible (Time limit).\n");
                         break;
+                    case CPXMIP_DETTIME_LIM_INFEAS:
+                        printf("FMIP is infeasible (DetTime limit).\n");
+                        break;
                     default:
                         fprintf(stderr, "Failed to optimize FMIP "
                                         "(Unknown status)\n"
@@ -1551,6 +1579,9 @@ int main(int argc, char *argv[]) {
                     break;
                 case CPXMIP_TIME_LIM_FEAS:
                     printf("Found a feasibile solution for FMIP (Time limit).\n");
+                    break;
+                case CPXMIP_DETTIME_LIM_FEAS:
+                    printf("Found a feasibile solution for FMIP (DetTime limit).\n");
                     break;
                 default:
                     continue; // Try to solve another FMIP.
@@ -1622,6 +1653,9 @@ int main(int argc, char *argv[]) {
                     case CPXMIP_TIME_LIM_INFEAS:
                         printf("OMIP is infeasible (Time limit).\n");
                         break;
+                    case CPXMIP_DETTIME_LIM_INFEAS:
+                        printf("OMIP is infeasible (DetTime limit).\n");
+                        break;
                     default:
                         fprintf(stderr, "Failed to optimize OMIP (Unknown)\n"
                                         "Solution status: %d\n", solstat_fmip);
@@ -1657,6 +1691,9 @@ int main(int argc, char *argv[]) {
                     break;
                 case CPXMIP_TIME_LIM_FEAS:
                     printf("Found a feasibile solution for OMIP (Time limit).\n");
+                    break;
+                case CPXMIP_DETTIME_LIM_FEAS:
+                    printf("Found a feasibile solution for OMIP (DetTime limit).\n");
                     break;
                 default:
                     continue; // Try to solve another OMIP.
