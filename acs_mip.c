@@ -1381,8 +1381,8 @@ int main(int argc, char *argv[]) {
 
     // Calculate deterministic time limit and set the parameter.
     dettime_lim = (double) numnz_mip / 100.0;
-    if (dettime_lim < 1000) {
-        dettime_lim = 1000;
+    if (dettime_lim < 10000) {
+        dettime_lim = 10000;
     } else if (dettime_lim > 100000) {
         dettime_lim = 100000;
     }
