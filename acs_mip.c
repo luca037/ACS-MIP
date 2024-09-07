@@ -1033,6 +1033,10 @@ int generate_starting_vector(
                     }
                 }
                 break;
+            case CPX_STAT_ABORT_DETTIME_LIM:
+                tmp *= 50;
+                printf("Increased fixed random variables "
+                       "at each iteration due to abort time error.\n");
             default:
                 fprintf(stderr, "Failed to optimize FMIP relax.\n");
         }
@@ -1478,26 +1482,6 @@ int main(int argc, char *argv[]) {
         goto TERMINATE;
     }
 
-    // Calculate theta.
-    int a[] = {1, 5, 10, 20, 50, 100};
-    double diff, t, theta;
-    theta = (double) numnz_mip * 100 / 2000000;
-
-    if (theta > 70) {
-        theta = 100;
-    } else {
-        t = a[0];
-        diff = fabs(theta - a[0]);
-        for (i = 1; i < 6; i++) {
-            if (fabs(theta - a[i]) < diff) {
-                diff = fabs(theta - a[i]);
-                t = a[i];
-            }
-        }
-        theta = t;
-    }
-    printf("\nTheta: %f\n", theta);
-
     // Generte the starting point.
     printf("\n### Generate starting point ###\n");
     status = generate_starting_vector(
@@ -1509,7 +1493,7 @@ int main(int argc, char *argv[]) {
         lb_mip,
         ub_mip,
         BOUND_CONSTANT,
-        theta
+        1
     );
     if (status) {
         fprintf(stderr, "Failed to generate initial vector.\n");
