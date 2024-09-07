@@ -21,7 +21,7 @@
 
 /* Maximum number of attempts to solve FMIP/OMIP that has no solution due to
  * infeasability. */
-#define MAX_ATTEMPTS 2
+#define MAX_ATTEMPTS 5
 
 /* Maximum number of nodes explored during optimization. */
 #define NODE_LIMIT 1000 /* Not set */
@@ -32,9 +32,6 @@
 /* Maximum number of iteration. An iteration is complete when the solver has 
  * found a feasibile solution for FMIP and then a feasibile solution for OMIP. */
 #define MAX_ITR 10
-
-/* Percentage of integer variables that are fixed in both FMIP and OMIP. */
-#define FIXED_VAR_PERCENT 50
 
 /* It's used for initializing the starting vector. The value of the variable
  * is raondomly choosen from the range
@@ -49,11 +46,12 @@
  * progname: The executable's name.
  */
 void print_usage(char *progname) {
-   fprintf (stderr, "Usage: %s -i <intput> -o <output> -s <seed>\n"
+   fprintf (stderr, "Usage: %s -i <intput> -o <output> -s <seed> -p <%%varfixing>\n"
                     "   input: is a file with extension \n"
                     "      MPS, SAV, or LP (lower case is allowed)\n"
                     "   output: is a file with extension csv\n"
                     "   seed: any integer number\n"
+                    "   %%varfixing: is the percentage of the variable fixing\n"
                     " Exiting...\n", progname
    );
 }
@@ -1281,7 +1279,7 @@ int main(int argc, char *argv[]) {
 
     char *in_fn = NULL, *out_fn = NULL; // Input and output file names.
     FILE *out_csv = NULL;               // Csv output file.
-    int seed = 0;
+    int seed = 0, fixed_var_perc = -1;
 
     int i, j, tmp, cnt, opt, status;
 
@@ -1289,7 +1287,7 @@ int main(int argc, char *argv[]) {
     double dettime_lim; // Deterministic time parameter.
 
     // Check command line options.
-    while ((opt = getopt(argc, argv, "i:o:s:")) != -1) {
+    while ((opt = getopt(argc, argv, "i:o:s:p:")) != -1) {
         switch (opt) {
             case 'i':
                 in_fn = optarg;
@@ -1300,13 +1298,19 @@ int main(int argc, char *argv[]) {
             case 's':
                 seed = atoi(optarg);
                 break;
+            case 'p':
+                fixed_var_perc = atoi(optarg);
+                if (fixed_var_perc > 100) {
+                    fixed_var_perc = 100;
+                }
+                break;
             default:
                 print_usage(argv[0]);
                 return 1;
         }
     }
 
-    if (in_fn == NULL || out_fn == NULL || seed == 0) {
+    if (in_fn == NULL || out_fn == NULL || seed == 0 || fixed_var_perc < 0) {
         print_usage(argv[0]);
         return 1;
     }
