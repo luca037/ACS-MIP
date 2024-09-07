@@ -1518,112 +1518,98 @@ int main(int argc, char *argv[]) {
 
     // ACS algorithm.
     for (cnt = 0; cnt < MAX_ITR; cnt++) {
-        // Try to solve FMIP.
-        for (i = 0; i < MAX_ATTEMPTS; i++) {
-            // Variable fixing on FMIP.
-            printf("\n### Variable fixing on FMIP "
-                   "- Attempt %d - Iteration %d ###\n", i, cnt);
-            bzero(is_fixed, num_int_vars * sizeof(int));
-            if (cnt == 0) { // Use initial vector only in the first iteration.
-                status = variable_fixing(
-                    env,
-                    fmip,
-                    int_indices,
-                    is_fixed,
-                    num_int_vars,
-                    starting_vector,
-                    FIXED_VAR_PERCENT
-                );
-            } else { // Otherwise use OMIP's solution.
-                status = variable_fixing(
-                    env,
-                    fmip,
-                    int_indices,
-                    is_fixed,
-                    num_int_vars,
-                    x_omip,
-                    FIXED_VAR_PERCENT
-                );
-            }
-            if (status) {
-                fprintf(stderr, "Failed to fix variables of FMIP.\n");
-                goto TERMINATE;
-            }
-
-            // Optimize FMIP.
-            status = optimize_prob(
+        // Variable fixing on FMIP.
+        printf("\n### Variable fixing on FMIP - Iteration %d ###\n", cnt);
+        bzero(is_fixed, num_int_vars * sizeof(int));
+        if (cnt == 0) { // Use initial vector only in the first iteration.
+            status = variable_fixing(
                 env,
                 fmip,
-                &objval_fmip,
-                &solstat_fmip,
-                x_fmip,
-                0,
-                numcols_submip - 1,
-                1
-            );
-            if (status) {
-                // If FMIP is infeasible.
-                switch (solstat_fmip) {
-                    case CPXMIP_NODE_LIM_INFEAS:
-                        printf("FMIP is infeasible (Node limit).\n");
-                        break;
-                    case CPXMIP_TIME_LIM_INFEAS:
-                        printf("FMIP is infeasible (Time limit).\n");
-                        break;
-                    case CPXMIP_DETTIME_LIM_INFEAS:
-                        printf("FMIP is infeasible (DetTime limit).\n");
-                        break;
-                    default:
-                        fprintf(stderr, "Failed to optimize FMIP "
-                                        "(Unknown status)\n"
-                                        "Solution status: %d\n", solstat_fmip);
-                        goto TERMINATE;
-                }
-            }
-
-            // Restore bounds of FMIP.
-            status = restore_bounds(
-                env,
-                fmip,
-                lb_mip,
-                ub_mip,
                 int_indices,
                 is_fixed,
-                num_int_vars
+                num_int_vars,
+                starting_vector,
+                fixed_var_perc
             );
-            if (status) {
-                fprintf (stderr, "Failed to restore FMIP bounds.\n");
-                goto TERMINATE;
-            }
-
-            // If the FMIP's solution is feasibile.
-            switch (solstat_fmip) {
-                case CPXMIP_OPTIMAL:
-                    printf("Found a feasibile solution for FMIP (Optimal).\n");
-                    break;
-                case CPXMIP_OPTIMAL_TOL:
-                    printf("Found a feasibile solution for FMIP (Optimal tollerance).\n");
-                    break;
-                case CPXMIP_NODE_LIM_FEAS:
-                    printf("Found a feasibile solution for FMIP (Node limit).\n");
-                    break;
-                case CPXMIP_TIME_LIM_FEAS:
-                    printf("Found a feasibile solution for FMIP (Time limit).\n");
-                    break;
-                case CPXMIP_DETTIME_LIM_FEAS:
-                    printf("Found a feasibile solution for FMIP (DetTime limit).\n");
-                    break;
-                default:
-                    continue; // Try to solve another FMIP.
-            }
-
-            break; // Only if FMIP's solution is feasibile.
+        } else { // Otherwise use OMIP's solution.
+            status = variable_fixing(
+                env,
+                fmip,
+                int_indices,
+                is_fixed,
+                num_int_vars,
+                x_omip,
+                fixed_var_perc 
+            );
+        }
+        if (status) {
+            fprintf(stderr, "Failed to fix variables of FMIP.\n");
+            goto TERMINATE;
         }
 
-        // If no FMIP has been resolved.
-        if (MAX_ATTEMPTS == i) {
-            printf("All FMIPs was infeasibile.\n");
-            break;
+        // Optimize FMIP.
+        status = optimize_prob(
+            env,
+            fmip,
+            &objval_fmip,
+            &solstat_fmip,
+            x_fmip,
+            0,
+            numcols_submip - 1,
+            1
+        );
+        if (status) {
+            // If FMIP is infeasible.
+            switch (solstat_fmip) {
+                case CPXMIP_NODE_LIM_INFEAS:
+                    printf("FMIP is infeasible (Node limit).\n");
+                    goto TERMINATE;
+                case CPXMIP_TIME_LIM_INFEAS:
+                    printf("FMIP is infeasible (Time limit).\n");
+                    goto TERMINATE;
+                case CPXMIP_DETTIME_LIM_INFEAS:
+                    printf("FMIP is infeasible (DetTime limit).\n");
+                    goto TERMINATE;
+                default:
+                    fprintf(stderr, "Failed to optimize FMIP "
+                                    "(Unknown status)\n"
+                                    "Solution status: %d\n", solstat_fmip);
+                    goto TERMINATE;
+            }
+        }
+
+        // Restore bounds of FMIP.
+        status = restore_bounds(
+            env,
+            fmip,
+            lb_mip,
+            ub_mip,
+            int_indices,
+            is_fixed,
+            num_int_vars
+        );
+        if (status) {
+            fprintf (stderr, "Failed to restore FMIP bounds.\n");
+            goto TERMINATE;
+        }
+
+        // If the FMIP's solution is feasibile.
+        switch (solstat_fmip) {
+            case CPXMIP_OPTIMAL:
+                printf("Found a feasibile solution for FMIP (Optimal).\n");
+                break;
+            case CPXMIP_OPTIMAL_TOL:
+                printf("Found a feasibile solution for FMIP (Optimal tollerance).\n");
+                break;
+            case CPXMIP_NODE_LIM_FEAS:
+                printf("Found a feasibile solution for FMIP (Node limit).\n");
+                break;
+            case CPXMIP_TIME_LIM_FEAS:
+                printf("Found a feasibile solution for FMIP (Time limit).\n");
+                break;
+            case CPXMIP_DETTIME_LIM_FEAS:
+                printf("Found a feasibile solution for FMIP (DetTime limit).\n");
+                break;
         }
 
         // Create OMIP in the first iteration.
@@ -1656,7 +1642,7 @@ int main(int argc, char *argv[]) {
                 is_fixed,
                 num_int_vars,
                 x_fmip,
-                FIXED_VAR_PERCENT
+                fixed_var_perc
             );
             if (status) {
                 fprintf(stderr, "Failed to fix variables of OMIP.\n");
@@ -1747,7 +1733,7 @@ int main(int argc, char *argv[]) {
         }
 
         if (MAX_ATTEMPTS == i) { // If no OMIP has been resolved.
-            printf("All OMIPs was infeasibile.\n");
+            printf("All OMIPs were infeasibile.\n");
             break;
         } else if (quality_loop) { // If a (MIP) feasibile solution was found.
             break;
@@ -1782,7 +1768,7 @@ int main(int argc, char *argv[]) {
                 is_fixed,
                 num_int_vars,
                 x_omip,
-                FIXED_VAR_PERCENT
+                fixed_var_perc
             );
             if (status) {
                 fprintf(stderr, "Failed to fix variables of OMIP.\n");
