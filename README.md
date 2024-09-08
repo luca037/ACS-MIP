@@ -16,5 +16,5 @@ Usage: ./acs_mip.out -i <intput> -o <output> -s <seed> -p <%varfixing>
       MPS, SAV, or LP (lower case is allowed)
    output: is a file with extension csv
    seed: any integer number
-   %varfixing: is the percentage of the variable fixing
+   %varfixing: is the percentage of fixed variables
 ```
