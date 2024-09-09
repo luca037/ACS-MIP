@@ -19,8 +19,7 @@
 /* Maximum column's name length. */
 #define MAX_COLNAME_LEN 9
 
-/* Maximum number of attempts to solve FMIP/OMIP that has no solution due to
- * infeasability. */
+/* Maximum number of attempts to solve OMIP. */
 #define MAX_ATTEMPTS 5
 
 /* Maximum number of nodes explored during optimization. */
@@ -30,7 +29,7 @@
 #define TIME_LIMIT 60 /* Not set */
 
 /* Maximum number of iteration. An iteration is complete when the solver has 
- * found a feasibile solution for FMIP and then a feasibile solution for OMIP. */
+ * found a feasibile solution for FMIP and than a feasibile solution for OMIP. */
 #define MAX_ITR 10
 
 /* It's used for initializing the starting vector. The value of the variable
@@ -51,7 +50,7 @@ void print_usage(char *progname) {
                     "      MPS, SAV, or LP (lower case is allowed)\n"
                     "   output: is a file with extension csv\n"
                     "   seed: any integer number\n"
-                    "   %%varfixing: is the percentage of the variable fixing\n"
+                    "   %%varfixing: is the percentage of fixed variables\n"
                     " Exiting...\n", progname
    );
 }
@@ -171,7 +170,7 @@ int init_mip_bds_and_indices(
     int i, j, status;
 
     // Save the indices of the integer variables of MIP.
-    for (i = 0, j = 0; i < numcols; i++) {
+    for (i = 0, j = 0; i < numcols && j < num_int_vars; i++) {
         char type;
         status = CPXgetctype(env, mip, &type, i, i);
         if (status) {
@@ -188,13 +187,13 @@ int init_mip_bds_and_indices(
     // Save lower bounds and upper bounds of MIP.
     status = CPXgetub(env, mip, ub, 0, numcols - 1);
     if (status) {
-        fprintf(stderr, "Failed to copy upper bounds coefficients of SRC.\n");
+        fprintf(stderr, "Failed to copy upper bounds coefficients of MIP.\n");
         return status;
     }
 
     status = CPXgetlb(env, mip, lb, 0, numcols - 1);
     if (status) {
-        fprintf(stderr, "Failed to copy lower bounds coefficients of SRC.\n");
+        fprintf(stderr, "Failed to copy lower bounds coefficients of MIP.\n");
         return status;
     }
 
@@ -343,17 +342,6 @@ int variable_fixing(
         is_fixed[tmp] = 1;
     }
 
-    // Stampa variabili fissate.
-    //printf("Variabili fissate:\n");
-    //for (int j = 0; j < num_int_vars; j++) {
-    //    char name[MAX_COLNAME_LEN];
-    //    if (fixed_indices[j]) {
-    //        get_colname(env, lp, int_indices[j], name);
-    //        printf("Var fissata -> %s, valore -> %f\n", name, x[int_indices[j]]);
-    //    }
-    //}
-    //printf("\n");
-
     return 0;
 }
 
@@ -371,8 +359,10 @@ int variable_fixing(
  * beg: Specifies the beginning of the range of the variables values to be
  *      returned.
  * end: Specifies the end of the range of the variables values to be returned.
- * verbose: Manage output verbosity. If it's set to a nonzero value then
- *          objval and solstat are printed to standard output.
+ * verbose: Manage output verbosity. If it's set to 1 objval and solstat 
+ *          are printed to standard output. If the value is greater than 1
+ *          objval, solstat and all the variables values are printed to
+ *          standard output.
  *
  * return: Returns 0 if successful and nonzero if an error occurs.
  */
@@ -436,15 +426,19 @@ int optimize_prob(
     if (verbose) {
         printf("Solution status: %d\n", *solstat);
         printf("Objective value: %f\n", *objval);
-        //printf("Variables values:\n");
-        //char colname[MAX_COLNAME_LEN];
-        //for (int i = 0; i < numcols; i++) { 
-        //    if (get_colname(env, lp, i, colname) == 0) {
-        //        printf("Column = %d,\tValue = %f,\tVar name = %s\n", i, x[i], colname);
-        //    } else {
-        //        printf("Column = %d,\tValue = %f,\tVar name = *error*\n", i, x[i]);
-        //    }
-        //}
+        if (verbose > 1) {
+            printf("Variables values:\n");
+            char colname[MAX_COLNAME_LEN];
+            for (int i = 0; i < numcols; i++) { 
+                if (get_colname(env, lp, i, colname) == 0) {
+                    printf("Column = %d,\tValue = %f,\tVar name = %s\n",
+                            i, x[i], colname);
+                } else {
+                    printf("Column = %d,\tValue = %f,\tVar name = *error*\n",
+                            i, x[i]);
+                }
+            }
+        }
     }
     
     return 0;
@@ -1385,8 +1379,8 @@ int main(int argc, char *argv[]) {
 
     // Calculate deterministic time limit and set the parameter.
     dettime_lim = (double) numnz_mip / 100.0;
-    if (dettime_lim < 10000) {
-        dettime_lim = 10000;
+    if (dettime_lim < 15000) {
+        dettime_lim = 15000;
     } else if (dettime_lim > 100000) {
         dettime_lim = 100000;
     }
@@ -1460,14 +1454,14 @@ int main(int argc, char *argv[]) {
         goto TERMINATE;
     }
 
-    // Allocate space for the initial vector (the starting point).
+    // Space for the initial vector (the starting point).
     starting_vector = (double*) malloc(numcols_mip * sizeof(double));
     if (starting_vector == NULL) {
         fprintf(stderr, "No memory for initial_vector.\n");
         goto TERMINATE;
     }
 
-    // Allocate space for the solution of FMIP.
+    // Space for the solution of FMIP.
     numcols_submip = CPXgetnumcols(env, fmip);
     x_fmip = (double*) malloc(numcols_submip * sizeof(double));
     if (x_fmip == NULL) {
