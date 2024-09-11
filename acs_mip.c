@@ -278,14 +278,14 @@ int restore_bounds(
  * The ammount of variables that is fixed is set by the percentage parameter.
  *
  * For example:
- *      int_indices = {1, 4, 20}, x = {100, 49, 66}, fixed_indices = {0, 0, 0},
- *      percentage = 50
+ *      int_indices = {0, 2, 3}, x = {100, ?, 66, 4},
+ *      fixed_indices = {0, 0, 0}, percentage = 50
  *      
  *      If the random generetor generates the value 2 then the variable
  *      with index int_indices[2] is fixed to the value x[int_indices[2]].
  *      Then in fixed_indices[2] will be stored 1.
  *
- *      In other words variable with index 20 will be fixed to 66 and 
+ *      In other words variable with index 3 will be fixed to 4 and 
  *      fixed_indices = {0, 0, 1}.
  *
  * env: A pointer to the CPLEX environment.
@@ -383,20 +383,17 @@ int optimize_prob(
     switch (prob_t) {
         case CPXPROB_LP:
             status = CPXlpopt(env, lp);
-            if (status) {
-                fprintf(stderr, "Failed to optimize lp.\n");
-                return status;
-            }
             break;
         case CPXPROB_MILP:
             status = CPXmipopt(env, lp);
-            if (status) {
-                fprintf(stderr, "Failed to optimize lp.\n");
-                return status;
-            }
             break;
         default:
-            fprintf(stderr, "Type of problem (%d) not supported lp.\n", prob_t);
+            fprintf(stderr, "Type of problem (%d) not supported.\n", prob_t);
+            return 1;
+    }
+    if (status) {
+        fprintf(stderr, "Failed to optimize lp.\n");
+        return status;
     }
 
     // Get solution status.
