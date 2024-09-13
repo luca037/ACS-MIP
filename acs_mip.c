@@ -14,7 +14,7 @@
  *     Delta- = [dn1, dn2, dn3, ..., dni, ...,]
  * Note that 2 characters are taken by 'd' and 'p' or 'n' and 1 character
  * is taken by '\0'. */
-#define MAX_SLACK_NAMES_LEN 9
+#define MAX_SLACK_NAME_LEN 9
 
 /* Maximum column's name length. */
 #define MAX_COLNAME_LEN 9
@@ -312,14 +312,14 @@ int variable_fixing(
     int *is_fixed,
     int num_int_vars,
     double *x,
-    int percentage
+    int rho
 ) {
     int i, tmp, cnt, rnd, status;
     double val;
     char lu = 'B';
 
     // Number of variables to fix.
-    cnt = num_int_vars * percentage / 100;
+    cnt = num_int_vars * rho / 100;
     printf("Variables to fix: %d\n", cnt);
 
     // Choose a random position of 'int_indices', 
@@ -485,7 +485,7 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
 
     // Space for the names.
     for (i = 0; i < ccnt; i++) {
-        colnames[i] = (char*) malloc(MAX_SLACK_NAMES_LEN * sizeof(char));
+        colnames[i] = (char*) malloc(MAX_SLACK_NAME_LEN * sizeof(char));
         if (colnames[i] == NULL) {
             fprintf(stderr, "No memory for slack variabiles names.\n");
             status = 1;
@@ -495,8 +495,8 @@ int add_slack_cols(CPXENVptr env, CPXLPptr lp) {
 
     // Assign slack variables names.
     for (i = 0; i < numrows; i++) {
-        snprintf(colnames[i], MAX_SLACK_NAMES_LEN, "dp%d", i + 1);
-        snprintf(colnames[i + numrows], MAX_SLACK_NAMES_LEN, "dn%d", i + 1);
+        snprintf(colnames[i], MAX_SLACK_NAME_LEN, "dp%d", i + 1);
+        snprintf(colnames[i + numrows], MAX_SLACK_NAME_LEN, "dn%d", i + 1);
     }
 
     // Init: matbeg.
@@ -578,7 +578,7 @@ TERMINATE:
     for (i = 0; i < ccnt; i++) {
         free_and_null(&colnames[i]);
     }
-    free_and_null(colnames);
+    free_and_null((char**) &colnames);
 
     return status;
 }
@@ -698,7 +698,7 @@ int copy_prob(CPXENVptr env, CPXLPptr src, CPXLPptr dst) {
     }
 
     // Save the righ hand side sense (thus >=, <=, =) of SRC.
-    sense = (char*) malloc(numrows * sizeof(double));
+    sense = (char*) malloc(numrows * sizeof(char));
     if (sense == NULL) {
         fprintf(stderr, "No memory for saving sense of SRC.\n");
         status = 1;
@@ -1274,7 +1274,7 @@ int main(int argc, char *argv[]) {
 
     char *in_fn = NULL, *out_fn = NULL; // Input and output file names.
     FILE *out_csv = NULL;               // Csv output file.
-    int seed = 0, fixed_var_perc = -1;
+    int seed = 0, rho = -1;
 
     int i, j, tmp, cnt, opt, status;
 
@@ -1294,9 +1294,9 @@ int main(int argc, char *argv[]) {
                 seed = atoi(optarg);
                 break;
             case 'p':
-                fixed_var_perc = atoi(optarg);
-                if (fixed_var_perc > 100) {
-                    fixed_var_perc = 100;
+                rho = atoi(optarg);
+                if (rho > 100) {
+                    rho = 100;
                 }
                 break;
             default:
@@ -1305,7 +1305,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    if (in_fn == NULL || out_fn == NULL || seed == 0 || fixed_var_perc < 0) {
+    if (in_fn == NULL || out_fn == NULL || seed == 0 || rho < 0) {
         print_usage(argv[0]);
         return 1;
     }
@@ -1504,7 +1504,7 @@ int main(int argc, char *argv[]) {
                 is_fixed,
                 num_int_vars,
                 starting_vector,
-                fixed_var_perc
+                rho
             );
         } else { // Otherwise use OMIP's solution.
             status = variable_fixing(
@@ -1514,7 +1514,7 @@ int main(int argc, char *argv[]) {
                 is_fixed,
                 num_int_vars,
                 x_omip,
-                fixed_var_perc 
+                rho 
             );
         }
         if (status) {
@@ -1617,7 +1617,7 @@ int main(int argc, char *argv[]) {
                 is_fixed,
                 num_int_vars,
                 x_fmip,
-                fixed_var_perc
+                rho
             );
             if (status) {
                 fprintf(stderr, "Failed to fix variables of OMIP.\n");
@@ -1743,7 +1743,7 @@ int main(int argc, char *argv[]) {
                 is_fixed,
                 num_int_vars,
                 x_omip,
-                fixed_var_perc
+                rho
             );
             if (status) {
                 fprintf(stderr, "Failed to fix variables of OMIP.\n");
@@ -1842,7 +1842,7 @@ TERMINATE:
     }
 
     if (omip != NULL) {
-        status = CPXfreeprob(env, &fmip);
+        status = CPXfreeprob(env, &omip);
         if (status) {
             fprintf(stderr, "CPXfreeprob failed, error code %d.\n", status);
         }
