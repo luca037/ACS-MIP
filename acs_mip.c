@@ -945,7 +945,6 @@ int generate_starting_vector(
             upper = (int) min(ub[int_indices[beg]], cb);
             lower = (int) max(lb[int_indices[beg]], -cb);
             rnd = (int) (rand() % (upper - lower + 1)) + lower;
-            //printf("Col: %d, upper: %d, lower: %d, val: %f\n", int_indices[beg], upper, lower, val);
 
             // Save the value.
             initial_vector[int_indices[beg]] = rnd;
@@ -1001,7 +1000,6 @@ int generate_starting_vector(
                     if (!is_fixed[i] &&                       // If is int.
                         round(x_relax[int_indices[i]]) == 
                         x_relax[int_indices[i]]) {
-                        //printf("Column %d -> integer, value -> %f.\n", int_indices[i], x_relax[int_indices[i]]);
                         initial_vector[int_indices[i]] = x_relax[int_indices[i]];
                         is_fixed[i] = 'O'; // Optimize fix.
                         tot_fixed += 1; // Update total fixed counter.
