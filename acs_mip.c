@@ -20,7 +20,7 @@
 #define MAX_COLNAME_LEN 9
 
 /* Maximum number of attempts to solve OMIP. */
-#define MAX_ATTEMPTS 5
+#define MAX_ATTEMPTS 1
 
 /* Maximum number of nodes explored during optimization. */
 #define NODE_LIMIT 1000 /* Not set */
@@ -1263,6 +1263,8 @@ int main(int argc, char *argv[]) {
     int *is_fixed = NULL;    // Manages fixed variables.
     int num_int_vars;        // Ammount of integer variables of MIP.
 
+    int *varindices_submip = NULL; // Indices of the variables in the subMIPs.
+
     double *starting_vector = NULL; // Used for the first variable fixing.
 
     double *lb_mip = NULL; // Lower bounds of MIP.
@@ -1278,6 +1280,8 @@ int main(int argc, char *argv[]) {
 
     int quality_loop = 0;
     double dettime_lim; // Deterministic time parameter.
+
+    int effortlevel = CPX_MIPSTART_REPAIR; // Effort level for the mip starts.
 
     // Check command line options.
     while ((opt = getopt(argc, argv, "i:o:s:p:")) != -1) {
@@ -1374,8 +1378,8 @@ int main(int argc, char *argv[]) {
 
     // Calculate deterministic time limit and set the parameter.
     dettime_lim = (double) numnz_mip / 100.0;
-    if (dettime_lim < 15000) {
-        dettime_lim = 15000;
+    if (dettime_lim < 20000) {
+        dettime_lim = 20000;
     } else if (dettime_lim > 100000) {
         dettime_lim = 100000;
     }
@@ -1394,13 +1398,6 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "Failed to create FMIP.\n");
         goto TERMINATE;
     }
-
-    // Salvo il problema FMIP in un file.
-    //status = CPXwriteprob(env, fmip, "fmip.lp", NULL);
-    //if (status) {
-    //    fprintf (stderr, "Failed to write FMIP to disk.\n");
-    //    goto TERMINATE;
-    //}
 
     // Init all the arrays that store info about MIP.
     // Calculate the total ammount of integer variables of MIP.
@@ -1464,14 +1461,25 @@ int main(int argc, char *argv[]) {
         goto TERMINATE;
     }
 
-    // Allocate space for the solution of OMIP.
+    // Space for the solution of OMIP.
     x_omip = (double*) malloc(numcols_submip * sizeof(double));
     if (x_omip == NULL) {
         fprintf(stderr, "No memory for solution values for OMIP.\n");
         goto TERMINATE;
     }
 
-    // Generte the starting point.
+    // Init indices of the variables in the subMIPs.
+    varindices_submip = (int*) malloc(numcols_submip * sizeof(int));
+    if (varindices_submip == NULL) {
+        fprintf(stderr, "No memory for sumMip var indices.\n");
+        goto TERMINATE;
+    }
+    
+    for (i = 0; i < numcols_submip; i++) {
+        varindices_submip[i] = i;
+    }
+
+    // Generate the starting point.
     printf("\n### Generate starting point ###\n");
     status = generate_starting_vector(
         env,
@@ -1494,7 +1502,7 @@ int main(int argc, char *argv[]) {
         // Variable fixing on FMIP.
         printf("\n### Variable fixing on FMIP - Iteration %d ###\n", cnt);
         bzero(is_fixed, num_int_vars * sizeof(int));
-        if (cnt == 0) { // Use initial vector only in the first iteration.
+        if (cnt == 0) { // Use starting vector only in the first iteration.
             status = variable_fixing(
                 env,
                 fmip,
@@ -1602,6 +1610,41 @@ int main(int argc, char *argv[]) {
             }
         }
 
+        if (cnt != 0) {
+            // Remove all mip starts from OMIP.
+            status = CPXdelmipstarts(
+                env,
+                omip,
+                0,
+                CPXgetnummipstarts(env, omip) - 1
+            );
+            if (status) {
+                fprintf(stderr, "Error deleting MIP starts.\n");
+                goto TERMINATE;
+            }
+        }
+
+        // Add the FMIP solution as a mip start for OMIP.
+        tmp = 0;
+        status = CPXaddmipstarts(
+            env,
+            omip,
+            1,
+            numcols_submip,
+            &tmp,
+            varindices_submip,
+            x_fmip,
+            &effortlevel,
+            NULL
+        );
+        if (status) {
+            fprintf(stderr, "Failed to add mip start for OMIP.\n");
+            goto TERMINATE;
+        }
+        
+
+        // TODO: Remove the for loop below. Using mip starts avoid the
+        //       infeasability caused by the deterministic time limit.
         // Try to solve OMIP.
         for (i = 0; i < MAX_ATTEMPTS; i++) {
             // Variable fixing on OMIP.
@@ -1710,6 +1753,36 @@ int main(int argc, char *argv[]) {
             break;
         } else if (quality_loop) { // If a (MIP) feasibile solution was found.
             break;
+        }
+
+        // Remove all mip starts from FMIP.
+        status = CPXdelmipstarts(
+            env,
+            fmip,
+            0,
+            CPXgetnummipstarts(env, fmip) - 1
+        );
+        if (status) {
+            fprintf(stderr, "Error deleting MIP starts.\n");
+            goto TERMINATE;
+        }
+
+        // Add OMIP solution as a mip start for FMIP.
+        tmp = 0;
+        status = CPXaddmipstarts(
+            env,
+            fmip,
+            1,
+            numcols_submip,
+            &tmp,
+            varindices_submip,
+            x_omip,
+            &effortlevel,
+            NULL
+        );
+        if (status) {
+            fprintf(stderr, "Failed to add mip start for FMIP.\n");
+            goto TERMINATE;
         }
     }
 
@@ -1823,6 +1896,7 @@ TERMINATE:
     free_and_null((char**) &starting_vector);
     free_and_null((char**) &lb_mip);
     free_and_null((char**) &ub_mip);
+    free_and_null((char**) &varindices_submip);
 
     // Free up the problems allocated by CPXcreateprob, if necessary.
     if (mip != NULL) {
