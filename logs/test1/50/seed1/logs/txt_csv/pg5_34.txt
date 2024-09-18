@@ -1,0 +1,286 @@
+INPUT FILE: benchmark/pg5_34.mps.gz
+
+Creating MIP.
+Selected objective sense:  MINIMIZE
+Selected objective  name:  obj
+Selected RHS        name:  rhs
+Selected bound      name:  bnd
+
+Creating FMIP.
+Slack variables to add: 450
+
+### Generate starting point ###
+Generating random values . . .
+Optimize FMIP relaxation . . . - Iteration 0
+Version identifier: 22.1.0.0 | 2022-03-09 | 1a383f8ce
+CPXPARAM_DetTimeLimit                            1000
+Parallel mode: deterministic, using up to 4 threads for concurrent optimization:
+ * Starting dual Simplex on 1 thread...
+ * Starting Barrier on 3 threads...
+Tried aggregator 1 time.
+LP Presolve eliminated 2 rows and 253 columns.
+Reduced LP has 223 rows, 2797 columns, and 7846 nonzeros.
+Presolve time = 0.01 sec. (2.74 ticks)
+
+Dual simplex solved model.
+
+Solution status: 1
+Objective value: 0.000000
+Found a feasibile solution for FMIP relax.
+Fixed values situation: Random: 1, Optimize: 99, Not fixed: 0
+
+### Variable fixing on FMIP - Iteration 0 ###
+Variables to fix: 50
+Version identifier: 22.1.0.0 | 2022-03-09 | 1a383f8ce
+CPXPARAM_DetTimeLimit                            1000
+Found incumbent of value 0.000000 after 0.00 sec. (0.12 ticks)
+
+Root node processing (before b&c):
+  Real time             =    0.00 sec. (0.16 ticks)
+Parallel b&c, 4 threads:
+  Real time             =    0.00 sec. (0.00 ticks)
+  Sync time (average)   =    0.00 sec.
+  Wait time (average)   =    0.00 sec.
+                          ------------
+Total (root+branch&cut) =    0.00 sec. (0.16 ticks)
+Solution status: 101
+Objective value: 0.000000
+Found a feasibile solution for FMIP (Optimal).
+
+Creating OMIP.
+Slack variables to add: 450
+
+### Variable fixing on OMIP - Attempt 0 - Iteration 0 ###
+Variables to fix: 50
+Version identifier: 22.1.0.0 | 2022-03-09 | 1a383f8ce
+CPXPARAM_DetTimeLimit                            1000
+1 of 1 MIP starts provided solutions.
+MIP start 'm1' defined initial solution with objective 0.0000.
+Tried aggregator 1 time.
+MIP Presolve eliminated 101 rows and 1750 columns.
+Reduced MIP has 125 rows, 1300 columns, and 3850 nonzeros.
+Reduced MIP has 50 binaries, 0 generals, 0 SOSs, and 0 indicators.
+Presolve time = 0.00 sec. (1.87 ticks)
+Probing time = 0.00 sec. (0.14 ticks)
+Tried aggregator 1 time.
+Detecting symmetries...
+Reduced MIP has 125 rows, 1300 columns, and 3850 nonzeros.
+Reduced MIP has 50 binaries, 0 generals, 0 SOSs, and 0 indicators.
+Presolve time = 0.00 sec. (1.74 ticks)
+Probing time = 0.00 sec. (0.14 ticks)
+MIP emphasis: balance optimality and feasibility.
+MIP search method: dynamic search.
+Parallel mode: deterministic, using up to 4 threads.
+Root relaxation solution time = 0.00 sec. (1.03 ticks)
+
+        Nodes                                         Cuts/
+   Node  Left     Objective  IInf  Best Integer    Best Bound    ItCnt     Gap
+
+*     0+    0                            0.0000   -13762.0000              --- 
+      0     0   -12202.6229     2        0.0000   -12202.6229      121     --- 
+*     0+    0                       -12192.9675   -12202.6229             0.08%
+      0     0        cutoff         -12192.9675                    154    0.00%
+Elapsed time = 0.02 sec. (9.03 ticks, tree = 0.01 MB, solutions = 2)
+
+Root node processing (before b&c):
+  Real time             =    0.02 sec. (9.16 ticks)
+Parallel b&c, 4 threads:
+  Real time             =    0.00 sec. (0.00 ticks)
+  Sync time (average)   =    0.00 sec.
+  Wait time (average)   =    0.00 sec.
+                          ------------
+Total (root+branch&cut) =    0.02 sec. (9.16 ticks)
+Solution status: 101
+Objective value: -12192.967485
+Found a feasibile solution for OMIP (Optimal).
+Slack sum: 0.000000
+Found a feasibile solution for MIP.
+
+### Improve feasibile solution quality ###
+Iteration: 0
+Variables to fix: 50
+Version identifier: 22.1.0.0 | 2022-03-09 | 1a383f8ce
+CPXPARAM_DetTimeLimit                            1000
+1 of 2 MIP starts provided solutions.
+MIP start 'm1' defined initial solution with objective -12192.9675.
+Tried aggregator 1 time.
+MIP Presolve eliminated 68 rows and 925 columns.
+Reduced MIP has 158 rows, 2125 columns, and 5500 nonzeros.
+Reduced MIP has 50 binaries, 0 generals, 0 SOSs, and 0 indicators.
+Presolve time = 0.00 sec. (2.05 ticks)
+Tried aggregator 1 time.
+Detecting symmetries...
+Reduced MIP has 158 rows, 2125 columns, and 5500 nonzeros.
+Reduced MIP has 50 binaries, 0 generals, 0 SOSs, and 0 indicators.
+Presolve time = 0.00 sec. (2.47 ticks)
+Probing time = 0.00 sec. (0.15 ticks)
+MIP emphasis: balance optimality and feasibility.
+MIP search method: dynamic search.
+Parallel mode: deterministic, using up to 4 threads.
+Root relaxation solution time = 0.01 sec. (4.00 ticks)
+
+        Nodes                                         Cuts/
+   Node  Left     Objective  IInf  Best Integer    Best Bound    ItCnt     Gap
+
+*     0+    0                       -12192.9675   -22616.0000            85.48%
+      0     0   -14707.8073    47   -12192.9675   -14707.8073      346   20.63%
+      0     0   -14081.4902    38   -12192.9675     Cuts: 150      642   15.49%
+      0     0   -13672.2392    29   -12192.9675     Cuts: 150      963   12.13%
+*     0+    0                       -12576.4090   -13672.2392             8.71%
+*     0+    0                       -13224.2625   -13672.2392             3.39%
+      0     0   -13431.8699    17   -13224.2625     Cuts: 150     1307    1.57%
+      0     0   -13380.7305     4   -13224.2625     Cuts: 139     1524    1.18%
+*     0+    0                       -13324.2318   -13380.7305             0.42%
+      0     0   -13378.9095     2   -13324.2318      Cuts: 40     1560    0.41%
+Detecting symmetries...
+      0     0   -13378.7119     1   -13324.2318      Cuts: 14     1583    0.41%
+Detecting symmetries...
+      0     2   -13378.7119     1   -13324.2318   -13377.7827     1583    0.40%
+Elapsed time = 0.28 sec. (252.79 ticks, tree = 0.02 MB, solutions = 4)
+*     5+    2                       -13347.2111   -13377.7827             0.23%
+    340   182   -13356.2907     4   -13347.2111   -13373.8031     9872    0.20%
+*   402+  142                       -13347.3573   -13373.8031             0.20%
+    547   265   -13360.2436     5   -13347.3573   -13372.5785    12851    0.19%
+   1058   549   -13350.2058     4   -13347.3573   -13369.3659    24019    0.16%
+
+Implied bound cuts applied:  514
+Flow cuts applied:  8
+Mixed integer rounding cuts applied:  18
+Lift and project cuts applied:  4
+Gomory fractional cuts applied:  17
+
+Root node processing (before b&c):
+  Real time             =    0.28 sec. (252.21 ticks)
+Parallel b&c, 4 threads:
+  Real time             =    0.70 sec. (749.49 ticks)
+  Sync time (average)   =    0.02 sec.
+  Wait time (average)   =    0.00 sec.
+                          ------------
+Total (root+branch&cut) =    0.98 sec. (1001.71 ticks)
+Solution status: 131
+Objective value: -13347.357346
+Found a feasibile solution for OMIP (DetTime limit).
+
+Iteration: 1
+Variables to fix: 50
+Version identifier: 22.1.0.0 | 2022-03-09 | 1a383f8ce
+CPXPARAM_DetTimeLimit                            1000
+2 of 6 MIP starts provided solutions.
+MIP start 'm1' defined initial solution with objective -13347.3573.
+Tried aggregator 1 time.
+MIP Presolve eliminated 71 rows and 1000 columns.
+Reduced MIP has 155 rows, 2050 columns, and 5350 nonzeros.
+Reduced MIP has 50 binaries, 0 generals, 0 SOSs, and 0 indicators.
+Presolve time = 0.00 sec. (2.03 ticks)
+Tried aggregator 1 time.
+Detecting symmetries...
+Reduced MIP has 155 rows, 2050 columns, and 5350 nonzeros.
+Reduced MIP has 50 binaries, 0 generals, 0 SOSs, and 0 indicators.
+Presolve time = 0.00 sec. (2.38 ticks)
+Probing time = 0.00 sec. (0.15 ticks)
+MIP emphasis: balance optimality and feasibility.
+MIP search method: dynamic search.
+Parallel mode: deterministic, using up to 4 threads.
+Root relaxation solution time = 0.00 sec. (3.55 ticks)
+
+        Nodes                                         Cuts/
+   Node  Left     Objective  IInf  Best Integer    Best Bound    ItCnt     Gap
+
+*     0+    0                       -13347.3573   -22433.0000            68.07%
+      0     0   -15277.5763    44   -13347.3573   -15277.5763      323   14.46%
+      0     0   -14653.1536    41   -13347.3573     Cuts: 150      611    9.78%
+      0     0   -14324.4644    32   -13347.3573     Cuts: 150     1010    7.32%
+*     0+    0                       -13764.9111   -14324.4644             4.07%
+      0     0   -14066.1429    21   -13764.9111     Cuts: 150     1455    2.19%
+      0     0   -13978.8569    10   -13764.9111     Cuts: 140     1716    1.55%
+      0     0   -13973.1332     2   -13764.9111     Cuts: 138     1838    1.51%
+Detecting symmetries...
+      0     0   -13972.6460     2   -13764.9111      Cuts: 20     1870    1.51%
+*     0+    0                       -13829.6295   -13972.6460             1.03%
+*     0+    0                       -13875.7542   -13972.0800             0.69%
+*     0+    0                       -13892.5505   -13972.0800             0.57%
+*     0+    0                       -13893.4597   -13972.0800             0.57%
+      0     0  -1.00000e+75     0   -13893.4597   -13972.0800     1870    0.57%
+*     0+    0                       -13896.2219   -13972.0800             0.55%
+Detecting symmetries...
+      0     2   -13972.6460     2   -13896.2219   -13969.0902     1870    0.52%
+Elapsed time = 0.40 sec. (369.69 ticks, tree = 0.02 MB, solutions = 8)
+    267   168   -13938.4507     4   -13896.2219   -13969.0902     9819    0.52%
+    651   470   -13954.0668     4   -13896.2219   -13962.5272    20553    0.48%
+
+Implied bound cuts applied:  551
+Flow cuts applied:  2
+Mixed integer rounding cuts applied:  17
+Lift and project cuts applied:  1
+Gomory fractional cuts applied:  14
+
+Root node processing (before b&c):
+  Real time             =    0.40 sec. (369.08 ticks)
+Parallel b&c, 4 threads:
+  Real time             =    0.58 sec. (631.84 ticks)
+  Sync time (average)   =    0.03 sec.
+  Wait time (average)   =    0.00 sec.
+                          ------------
+Total (root+branch&cut) =    0.97 sec. (1000.92 ticks)
+Solution status: 131
+Objective value: -13896.221943
+Found a feasibile solution for OMIP (DetTime limit).
+
+Iteration: 2
+Variables to fix: 50
+Version identifier: 22.1.0.0 | 2022-03-09 | 1a383f8ce
+CPXPARAM_DetTimeLimit                            1000
+2 of 8 MIP starts provided solutions.
+MIP start 'm1' defined initial solution with objective -13896.2219.
+Tried aggregator 1 time.
+MIP Presolve eliminated 67 rows and 900 columns.
+Reduced MIP has 159 rows, 2150 columns, and 5550 nonzeros.
+Reduced MIP has 50 binaries, 0 generals, 0 SOSs, and 0 indicators.
+Presolve time = 0.00 sec. (2.05 ticks)
+Tried aggregator 1 time.
+Detecting symmetries...
+Reduced MIP has 159 rows, 2150 columns, and 5550 nonzeros.
+Reduced MIP has 50 binaries, 0 generals, 0 SOSs, and 0 indicators.
+Presolve time = 0.00 sec. (2.49 ticks)
+Probing time = 0.00 sec. (0.15 ticks)
+MIP emphasis: balance optimality and feasibility.
+MIP search method: dynamic search.
+Parallel mode: deterministic, using up to 4 threads.
+Root relaxation solution time = 0.00 sec. (3.00 ticks)
+
+        Nodes                                         Cuts/
+   Node  Left     Objective  IInf  Best Integer    Best Bound    ItCnt     Gap
+
+*     0+    0                       -13896.2219   -23456.0000            68.79%
+      0     0   -15249.4236    46   -13896.2219   -15249.4236      260    9.74%
+      0     0   -14601.8956    40   -13896.2219     Cuts: 150      567    5.08%
+      0     0   -14199.2907    30   -13896.2219     Cuts: 150      944    2.18%
+      0     0   -13988.8417    20   -13896.2219     Cuts: 150     1326    0.67%
+      0     0   -13952.4168     8   -13896.2219     Cuts: 144     1540    0.40%
+      0     0   -13949.1139     4   -13896.2219      Cuts: 73     1605    0.38%
+Detecting symmetries...
+      0     0   -13948.8669     3   -13896.2219      Cuts: 23     1647    0.38%
+Detecting symmetries...
+      0     2   -13948.8669     3   -13896.2219   -13948.7774     1647    0.38%
+Elapsed time = 0.26 sec. (244.74 ticks, tree = 0.02 MB, solutions = 2)
+    296   177   -13909.9512     2   -13896.2219   -13944.9257     9791    0.35%
+    711   404   -13916.5418     2   -13896.2219   -13941.6699    20637    0.33%
+   1137   607        cutoff         -13896.2219   -13938.6807    32406    0.31%
+
+Implied bound cuts applied:  461
+Flow cuts applied:  6
+Mixed integer rounding cuts applied:  8
+Lift and project cuts applied:  3
+Gomory fractional cuts applied:  10
+
+Root node processing (before b&c):
+  Real time             =    0.25 sec. (244.10 ticks)
+Parallel b&c, 4 threads:
+  Real time             =    0.67 sec. (756.59 ticks)
+  Sync time (average)   =    0.02 sec.
+  Wait time (average)   =    0.00 sec.
+                          ------------
+Total (root+branch&cut) =    0.92 sec. (1000.69 ticks)
+Solution status: 131
+Objective value: -13896.221943
+Found a feasibile solution for OMIP (DetTime limit).
