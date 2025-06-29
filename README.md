@@ -1,6 +1,13 @@
 # ACS-MIP
 Alternating Criteria Search is an heuristic algorithm that solves mixed-integer linear programming problems.
 
+
+
+https://github.com/user-attachments/assets/9b45334d-22b9-490e-9972-617481ab0cb0
+
+
+
+
 ## Dependencies
 - CPLEX 22.1.1
 
